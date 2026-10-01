@@ -75,6 +75,8 @@ const INDEX_CATEGORIES: Record<string, string> = {
   '18': 'תל גוב',
 };
 
+const CATEGORY_ORDER = ['02', '03', '04', '16', '08', '17', '18'];
+
 export type IndexRow = Quote & {
   category: string;
   gainers: number | null;
@@ -111,7 +113,15 @@ function indexRow(r: RawIndex): IndexRow {
 
 export async function allIndices(): Promise<IndexRow[]> {
   const raw = await tase<RawIndex[]>('api', 'index/getindayindices?lang=0', await liveTtl());
-  return raw.map(indexRow);
+  // Share indices before bond indices; within a category, the exchange's own order.
+  const rank = (code: string) => {
+    const i = CATEGORY_ORDER.indexOf(code);
+    return i < 0 ? CATEGORY_ORDER.length : i;
+  };
+  return raw
+    .map((r, n) => ({ r, n }))
+    .sort((a, b) => rank(a.r.IndexCategoryType) - rank(b.r.IndexCategoryType) || a.n - b.n)
+    .map(({ r }) => indexRow(r));
 }
 
 // ── overview ────────────────────────────────────────────────────────────────
