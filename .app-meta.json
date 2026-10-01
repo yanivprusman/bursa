@@ -1,0 +1,7 @@
+{
+  "description": "בורסה — הבורסה לניירות ערך בתל אביב בטלפון: מדדים, מניות, רשימת מעקב ותיק אישי",
+  "icon": "TrendingUp",
+  "sharedLibs": [
+    "android-feedback-lib"
+  ]
+}
