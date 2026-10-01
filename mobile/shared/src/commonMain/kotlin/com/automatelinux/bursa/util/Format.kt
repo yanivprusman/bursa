@@ -71,6 +71,7 @@ object Fmt {
 
     /** A large shekel amount in words: 141_700_004_000.0 → "141.7 מיליארד ₪". */
     fun bigShekels(v: Double): String = when {
+        abs(v) >= 1e12 -> trimmed(v / 1e12, 2) + " טריליון ₪"
         abs(v) >= 1e9 -> trimmed(v / 1e9, 1) + " מיליארד ₪"
         abs(v) >= 1e6 -> trimmed(v / 1e6, 1) + " מיליון ₪"
         abs(v) >= 1e4 -> trimmed(v / 1e3, 0) + " אלף ₪"

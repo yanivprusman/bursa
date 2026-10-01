@@ -150,6 +150,17 @@ export function paddedId(id: string | number): string {
   return bareId(id).padStart(8, '0');
 }
 
+/** The exchange pads some names with runs of spaces ("דיסקונט      א"). */
+export function tidy(s: string | null | undefined): string {
+  return (s ?? '').replace(/\s+/g, ' ').trim();
+}
+
+/** Company blurbs arrive with no space after a comma ("בפיתוח,ייצור ושיווק"). */
+export function prose(s: string | null | undefined): string | null {
+  const t = tidy(s).replace(/,(?=[^\s\d])/g, ', ');
+  return t || null;
+}
+
 export function num(v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null;
   const n = typeof v === 'number' ? v : Number(v);

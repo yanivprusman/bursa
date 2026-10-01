@@ -5,7 +5,7 @@
 // downloads it into the browser. We hold it here instead, so a phone on mobile
 // data sends a few bytes and gets back a few rows.
 
-import { bareId, tase } from './tase';
+import { bareId, tase, tidy } from './tase';
 import type { Kind } from './market';
 
 type RawEntity = {
@@ -75,7 +75,7 @@ async function rows(): Promise<Row[]> {
     out.push({
       kind,
       id: bareId(e.Id),
-      name: e.Name.trim(),
+      name: tidy(e.Name),
       symbol: e.Smb?.trim() || null,
       type,
       isin: e.ISIN,

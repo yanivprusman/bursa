@@ -50,6 +50,7 @@ class FormatTest {
     }
 
     @Test fun bigShekelsInWords() {
+        assertEquals("2.27 טריליון ₪", Fmt.bigShekels(2_267_733_000_000.0))
         assertEquals("141.7 מיליארד ₪", Fmt.bigShekels(141_700_004_000.0))
         assertEquals("587.3 מיליון ₪", Fmt.bigShekels(587_288_000.0))
         assertEquals("109 מיליון ₪", Fmt.bigShekels(109_034_062.0))

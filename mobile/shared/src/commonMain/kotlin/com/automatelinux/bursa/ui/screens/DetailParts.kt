@@ -49,6 +49,7 @@ import com.automatelinux.bursa.ui.theme.Bursa
 import com.automatelinux.bursa.ui.theme.NumBody
 import com.automatelinux.bursa.ui.theme.NumHero
 import com.automatelinux.bursa.ui.theme.NumMedium
+import com.automatelinux.bursa.ui.theme.NumSmall
 import com.automatelinux.bursa.ui.theme.NumTiny
 import com.automatelinux.bursa.ui.theme.of
 import com.automatelinux.bursa.util.Fmt
@@ -109,15 +110,16 @@ fun PriceHeader(q: Quote, sub: String?) {
     }
 }
 
+/** Range key → the chip's label → how the move over that range is worded. */
 private val RANGES = listOf(
-    "1d" to "יום",
-    "1w" to "שבוע",
-    "1m" to "חודש",
-    "3m" to "3 חודשים",
-    "6m" to "חצי שנה",
-    "1y" to "שנה",
-    "3y" to "3 שנים",
-    "5y" to "5 שנים",
+    Triple("1d", "יום", "מול סגירה קודמת"),
+    Triple("1w", "שבוע", "בשבוע האחרון"),
+    Triple("1m", "חודש", "בחודש האחרון"),
+    Triple("3m", "3 חודשים", "ב-3 חודשים"),
+    Triple("6m", "חצי שנה", "בחצי שנה"),
+    Triple("1y", "שנה", "בשנה האחרונה"),
+    Triple("3y", "3 שנים", "ב-3 שנים"),
+    Triple("5y", "5 שנים", "ב-5 שנים"),
 )
 
 /**
@@ -144,7 +146,7 @@ fun ChartBlock(kind: String, id: String, unit: String) {
     val last = points.lastOrNull()?.v
     val movePct = if (reference != null && last != null && reference != 0.0) (last - reference) / reference * 100 else null
     val color = c.of(movePct)
-    val label = RANGES.first { it.first == range }.second
+    val phrase = RANGES.first { it.first == range }.third
 
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(26.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -158,12 +160,17 @@ fun ChartBlock(kind: String, id: String, unit: String) {
                 movePct != null -> {
                     Num((if (movePct > 0) "▲ " else if (movePct < 0) "▼ " else "") + Fmt.fixed(abs(movePct), 2) + "%", style = NumMedium, color = color)
                     Spacer(Modifier.width(10.dp))
-                    Text(
-                        if (intraday) "מול סגירה קודמת" else "ב$label",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Text(phrase, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+            }
+            // The chart has no price axis; its lowest and highest points are named here instead.
+            if (at == null && points.size >= 2) {
+                Spacer(Modifier.weight(1f))
+                Num(
+                    Fmt.price(points.minOf { it.v }, unit) + " – " + Fmt.price(points.maxOf { it.v }, unit),
+                    style = NumSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
@@ -212,7 +219,7 @@ fun ChartBlock(kind: String, id: String, unit: String) {
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            RANGES.forEach { (key, text) ->
+            RANGES.forEach { (key, text, _) ->
                 FilterChip(
                     selected = range == key,
                     onClick = { range = key },

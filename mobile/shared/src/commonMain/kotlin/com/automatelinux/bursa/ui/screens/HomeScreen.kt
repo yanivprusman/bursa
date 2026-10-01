@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ShowChart
+import androidx.compose.material.icons.filled.CandlestickChart
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
@@ -114,7 +114,8 @@ private fun BottomBar(current: Tab, onSelect: (Tab) -> Unit) {
             val selected = t == current
             val icon = when (t) {
                 Tab.Mine -> if (selected) Icons.Filled.Star else Icons.Outlined.StarBorder
-                Tab.Market -> Icons.AutoMirrored.Filled.ShowChart
+                // Not an auto-mirrored icon: flipped for Hebrew, a rising chart would read as a falling one.
+                Tab.Market -> Icons.Filled.CandlestickChart
             }
             NavigationBarItem(
                 selected = selected,

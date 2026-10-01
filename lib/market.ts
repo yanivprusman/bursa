@@ -4,7 +4,7 @@
 // points for an index. Nothing here converts to shekels — a holding's worth is
 // quantity × price / 100 and the phone does that, so one number has one meaning.
 
-import { TaseError, bareId, clock, isoDate, num, paddedId, tase } from './tase';
+import { TaseError, bareId, clock, isoDate, num, paddedId, prose, tase, tidy } from './tase';
 
 export type Kind = 'security' | 'index';
 
@@ -88,7 +88,7 @@ function indexRow(r: RawIndex): IndexRow {
   return {
     kind: 'index',
     id: bareId(r.Id),
-    name: r.Name.trim(),
+    name: tidy(r.Name),
     symbol: null,
     type: 'מדד',
     last: r.LastRate,
@@ -160,7 +160,7 @@ export async function overview() {
   const m = movers['he-IL'];
   const mover = (withTurnover: boolean) => (r: RawMover): Mover => ({
     id: bareId(r.Id),
-    name: r.Name.trim(),
+    name: tidy(r.Name),
     last: r.LastRate,
     changePct: r.Change,
     turnover: withTurnover ? r.Value : null,
@@ -238,7 +238,7 @@ function securityQuote(r: RawSecurity): Quote {
   return {
     kind: 'security',
     id: bareId(r.Id),
-    name: r.Name.trim(),
+    name: tidy(r.Name),
     symbol: r.Symbol?.trim() || null,
     type: r.Type?.trim() || null,
     last,
@@ -266,12 +266,12 @@ export async function security(id: string) {
       `security/majordata?secId=${bareId(id)}&compId=${r.CompanyId}&lang=0`,
       6 * HOUR,
     );
-    about = major.CompanyDetails?.Description?.trim() || null;
+    about = prose(major.CompanyDetails?.Description);
     site = major.CompanyDetails?.Site?.trim().toLowerCase() || null;
   }
   return {
     ...securityQuote(r),
-    longName: r.SecurityLongName?.trim() || null,
+    longName: tidy(r.SecurityLongName) || null,
     subType: r.SecuritySubType?.trim() || null,
     sector: r.FullBranch?.trim() || null,
     isin: r.ISIN,
@@ -366,7 +366,7 @@ export async function index(id: string) {
       const cid = bareId(q.ISIN_ID || q.Id);
       return {
         id: cid,
-        name: q.Name.trim(),
+        name: tidy(q.Name),
         symbol: q.Symbol?.trim() || null,
         last: num(q.LastRate),
         changePct: num(q.Change),
@@ -394,7 +394,7 @@ export async function index(id: string) {
     yearYield: num(d.AnnualYield),
     /** Millions of shekels. */
     marketCap: num(d.MarketValue),
-    about: d.Description?.trim() || null,
+    about: prose(d.Description),
     components,
   };
 }
