@@ -1,3 +1,59 @@
 @import "tailwindcss";
 @source "../../../automateLinux/packages/feedback-lib/src";
 @source "../../../automateLinux/packages/feedback-lib-launcher/src";
+
+/* The same board the phone app draws: blue-black, paper-white numbers, and two
+   colours that mean something — green up, red down. */
+:root {
+  --bg: #0a101b;
+  --card: #131d2e;
+  --line: #212c3f;
+  --ink: #edeff3;
+  --muted: #98a4b8;
+  --gold: #f2b84b;
+  --up: #3dd68c;
+  --up-soft: #123524;
+  --down: #ff6b6b;
+  --down-soft: #3d1a1d;
+  --flat-soft: #1f2a3c;
+}
+
+@layer base {
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, "Segoe UI", "Noto Sans Hebrew", Arial, sans-serif;
+  }
+}
+
+@layer components {
+  .board { max-width: 980px; margin: 0 auto; padding: 28px 20px 64px; }
+  .board-head { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+  .board-head img { width: 44px; height: 44px; }
+  .board-head h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; flex: 1; }
+  .status { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+  .status i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .status.open { color: var(--up); }
+  .status.open i { background: var(--up); }
+  .lede { color: var(--muted); font-size: 15px; margin-bottom: 26px; max-width: 60ch; }
+  .section { font-size: 16px; font-weight: 700; margin: 30px 0 12px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+  .card { background: var(--card); border-radius: 16px; padding: 14px; }
+  .card h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  /* A string that is only a number reads left to right, even here. */
+  .num { direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; display: inline-block; }
+  .card .last { font-size: 18px; font-weight: 600; }
+  .chip { direction: ltr; unicode-bidi: isolate; display: inline-block; font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; border-radius: 8px; padding: 4px 8px; background: var(--flat-soft); color: var(--muted); }
+  .chip.up { background: var(--up-soft); color: var(--up); }
+  .chip.down { background: var(--down-soft); color: var(--down); }
+  .spark { display: block; width: 100%; height: 34px; margin-top: 12px; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .list h3 { color: var(--muted); font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .row:first-of-type { border-top: 0; }
+  .row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .foot { color: var(--muted); font-size: 13px; margin-top: 34px; line-height: 1.6; }
+  .foot a { color: var(--gold); text-decoration: underline; text-underline-offset: 3px; }
+  .foot a:hover { opacity: 0.8; }
+  .fail { background: var(--down-soft); color: var(--down); border-radius: 16px; padding: 16px; }
+}

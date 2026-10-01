@@ -1,13 +1,11 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <!-- The letter ב, for בורסה: roof and stem as one stroke, then the base. -->
     <path android:pathData="M37,39.5 H57 Q66.5,39.5 66.5,49 V68.5"
-        android:strokeColor="#F4EBD9" android:strokeWidth="9.5"
+        android:strokeColor="#FFFFFF" android:strokeWidth="9.5"
         android:strokeLineCap="round" android:strokeLineJoin="round" />
     <path android:pathData="M33,68.5 H75"
-        android:strokeColor="#F4EBD9" android:strokeWidth="9.5" android:strokeLineCap="round" />
-    <!-- The same ▲ the app puts beside every rising price, sitting in the letter's opening. -->
+        android:strokeColor="#FFFFFF" android:strokeWidth="9.5" android:strokeLineCap="round" />
     <path android:pathData="M37.5,60.5 L45.5,48.5 L53.5,60.5 Z"
-        android:fillColor="#34C77B" android:strokeColor="#34C77B"
+        android:fillColor="#FFFFFF" android:strokeColor="#FFFFFF"
         android:strokeWidth="2" android:strokeLineJoin="round" />
 </vector>

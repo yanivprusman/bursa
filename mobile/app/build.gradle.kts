@@ -19,7 +19,7 @@ val gitShortHash = providers.exec {
 val envFile = rootProject.file(".env")
 val envProps = Properties()
 if (envFile.exists()) envFile.inputStream().use { envProps.load(it) }
-val apiBaseUrl = envProps.getProperty("API_BASE_URL", "http://10.7.0.1:3169/")
+val apiBaseUrl = envProps.getProperty("API_BASE_URL", "http://10.7.0.2:3169/")
 
 android {
     namespace = "com.automatelinux.bursa"
@@ -59,8 +59,6 @@ android {
 dependencies {
     // Shared KMP module (commonMain code shared with iOS)
     implementation(project(":shared"))
-    implementation(libs.kotlinx.datetime)
-    implementation(libs.multiplatform.settings)
 
     // Compose BOM
     implementation(platform(libs.compose.bom))

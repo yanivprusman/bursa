@@ -29,7 +29,14 @@ kotlin {
             implementation(compose.materialIconsExtended)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.kotlinx.datetime)
-            implementation(libs.multiplatform.settings)
+            implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.ktor.client.core)
+        }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+        }
+        androidMain.dependencies {
+            implementation(libs.ktor.client.okhttp)
         }
     }
 }
