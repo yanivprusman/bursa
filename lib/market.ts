@@ -25,6 +25,8 @@ export type Quote = {
   tradeDate: string | null;
   /** "HH:MM" of the last trade while the session runs; null once it is end-of-day. */
   tradeTime: string | null;
+  /** The issuer, for its logo (/api/logo/<companyId>); null for an index. */
+  companyId: string | null;
 };
 
 const SEC = 1000;
@@ -103,6 +105,7 @@ function indexRow(r: RawIndex): IndexRow {
     unit: 'points',
     tradeDate: isoDate(r.TradeDate),
     tradeTime: clock(r.TradeTime),
+    companyId: null,
     category: INDEX_CATEGORIES[r.IndexCategoryType] ?? 'מדדים נוספים',
     gainers: num(r.Gainers),
     decliners: num(r.Decliners),
@@ -126,7 +129,7 @@ export async function allIndices(): Promise<IndexRow[]> {
 
 // ── overview ────────────────────────────────────────────────────────────────
 
-type RawMover = { Id: string; Name: string; LastRate: number; Change: number; Value: number };
+type RawMover = { Id: string; Name: string; LastRate: number; Change: number; Value: number; CompanyId: number | null };
 type RawMovers = {
   'he-IL': {
     TradeDate: string;
@@ -145,7 +148,15 @@ export type Mover = {
   changePct: number;
   /** Thousands of shekels; only on the "most traded" list. */
   turnover: number | null;
+  companyId: string | null;
 };
+
+/** The ticker strip: the market-cap indices, then the sectors. */
+const TAPE = [
+  '142', '137', '143', '147', '168', // ת"א-35, 125, 90, SME60, All-Share
+  '194', '148', '33', '149', '181', // בנקים, פיננסים, ביטוח, נדל"ן, בנייה
+  '169', '167', '172', '207', '170', '210', '188', // טכנולוגיה, ביומד, תקשורת, בטחוניות, נפט וגז, אנרגיה, צריכה
+];
 
 /** The headline indices, in the order they are shown. */
 const HEADLINE = ['142', '137', '143', '147', '194'];
@@ -174,6 +185,7 @@ export async function overview() {
     last: r.LastRate,
     changePct: r.Change,
     turnover: withTurnover ? r.Value : null,
+    companyId: r.CompanyId ? String(r.CompanyId) : null,
   });
 
   const ta125 = byId.get('137');
@@ -191,6 +203,11 @@ export async function overview() {
     breadth: ta125
       ? { gainers: ta125.gainers, decliners: ta125.decliners, unchanged: ta125.unchanged }
       : null,
+    /** The ticker strip: the indices people follow, in a fixed order. */
+    tape: TAPE.flatMap((id) => {
+      const i = byId.get(id);
+      return i ? [{ id: i.id, name: i.name, last: i.last, changePct: i.changePct }] : [];
+    }),
     /** Thousands of shekels per market segment. */
     turnovers: (turnovers.turnoversItems ?? []).map((t) => ({ name: t.name, value: t.value })),
   };
@@ -258,6 +275,7 @@ function securityQuote(r: RawSecurity): Quote {
     unit: 'agorot',
     tradeDate: isoDate(r.TradeDate),
     tradeTime: clock(r.TradeTime) ?? clock(r.LastDealTime),
+    companyId: r.CompanyId ? String(r.CompanyId) : null,
   };
 }
 
@@ -329,7 +347,7 @@ type RawComponentQuote = {
   Change: number | null;
   TurnOverValue: number | null;
 };
-type RawComponentWeight = { SecurityNumber: string; Weight: number | null };
+type RawComponentWeight = { SecurityNumber: string; Weight: number | null; CompanyId: number | null };
 
 const PAGE = 30;
 
@@ -356,6 +374,7 @@ export type Component = {
   weight: number | null;
   /** Thousands of shekels. */
   turnover: number | null;
+  companyId: string | null;
 };
 
 export async function index(id: string) {
@@ -370,7 +389,7 @@ export async function index(id: string) {
     // Weights are rebalanced on a schedule, not during the day.
     allPages<RawComponentWeight>('index/components', oId, 6 * HOUR),
   ]);
-  const weightOf = new Map(weights.map((w) => [bareId(w.SecurityNumber), num(w.Weight)]));
+  const weightOf = new Map(weights.map((w) => [bareId(w.SecurityNumber), w]));
   const components: Component[] = quotes
     .map((q) => {
       const cid = bareId(q.ISIN_ID || q.Id);
@@ -380,8 +399,9 @@ export async function index(id: string) {
         symbol: q.Symbol?.trim() || null,
         last: num(q.LastRate),
         changePct: num(q.Change),
-        weight: weightOf.get(cid) ?? null,
+        weight: num(weightOf.get(cid)?.Weight),
         turnover: num(q.TurnOverValue),
+        companyId: weightOf.get(cid)?.CompanyId ? String(weightOf.get(cid)?.CompanyId) : null,
       };
     })
     .sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));

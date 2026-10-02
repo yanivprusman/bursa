@@ -26,13 +26,14 @@ not trailing 30 / 365 days (that is how the exchange reports them).
 
 | Route | Returns |
 | :--- | :--- |
-| `/api/market` | `{ open, tradeDate, tradeTime, indices[], movers{gainers,losers,active}, breadth, turnovers[] }` — the headline indices carry `spark`, a month of closes |
+| `/api/market` | `{ open, tradeDate, tradeTime, indices[], tape[], movers{gainers,losers,active}, breadth, turnovers[] }` — the headline indices carry `spark`, a month of closes; `tape` is the ticker strip |
 | `/api/indices` | `{ indices[] }` — every index, with `category` |
 | `/api/index/<id>` | one index plus `components[]` (sorted by weight) |
 | `/api/security/<id>` | one security: quote, day range, yields, bond terms, `about` |
 | `/api/quotes?ids=s629014,i142` | `{ quotes[], missing[] }` — `s` = security, `i` = index, up to 80 |
 | `/api/chart?kind=security\|index&id=<id>&range=<r>` | `{ range, base, points[{t,v}] }`; `r` ∈ `1d 1w 1m 3m 6m 1y 3y 5y`, at most 240 points |
 | `/api/search?q=<text>` | `{ hits[] }` — Hebrew or English name, symbol, ISIN or number |
+| `/api/logo/<companyId>` | the issuer's logo, an 80×80 JPEG on white; `404` when the exchange has none. Securities, movers, components and search hits carry `companyId` |
 
 An index in a list (`/api/market`, `/api/indices`, `/api/quotes`) has `base` and
 `change` = `null`: the exchange's list carries only the percentage, and a previous

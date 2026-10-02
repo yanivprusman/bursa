@@ -16,6 +16,8 @@ type RawEntity = {
   /** 1 = traded security, 2 = index. The rest (companies, funds, reports) are not quotable here. */
   Type: number;
   SubTypeDesc: string | null;
+  /** For a security: the issuing company's id. */
+  SubId: string | null;
 };
 
 export type Hit = {
@@ -25,6 +27,7 @@ export type Hit = {
   symbol: string | null;
   type: string | null;
   isin: string | null;
+  companyId: string | null;
 };
 
 type Row = Hit & { keys: string[]; rank: number };
@@ -79,6 +82,7 @@ async function rows(): Promise<Row[]> {
       symbol: e.Smb?.trim() || null,
       type,
       isin: e.ISIN,
+      companyId: kind === 'security' && e.SubId ? bareId(e.SubId) : null,
       keys,
       rank: typeRank(kind, type),
     });
@@ -126,5 +130,6 @@ export async function search(query: string, limit = 40): Promise<Hit[]> {
     symbol: row.symbol,
     type: row.type,
     isin: row.isin,
+    companyId: row.companyId,
   }));
 }

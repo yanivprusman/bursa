@@ -1,13 +1,43 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <!-- The letter ב, for בורסה: roof and stem as one stroke, then the base. -->
-    <path android:pathData="M37,39.5 H57 Q66.5,39.5 66.5,49 V68.5"
-        android:strokeColor="#F4EBD9" android:strokeWidth="9.5"
-        android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:pathData="M33,68.5 H75"
-        android:strokeColor="#F4EBD9" android:strokeWidth="9.5" android:strokeLineCap="round" />
-    <!-- The same ▲ the app puts beside every rising price, sitting in the letter's opening. -->
-    <path android:pathData="M37.5,60.5 L45.5,48.5 L53.5,60.5 Z"
-        android:fillColor="#34C77B" android:strokeColor="#34C77B"
-        android:strokeWidth="2" android:strokeLineJoin="round" />
+    <!-- The mark: the letter ב (for בורסה) in gold, with two candlesticks — a red day, then a
+         taller green one — standing in its opening. Letter and trading chart are one shape. -->
+    <!-- Glow behind the green candle. -->
+    <path android:pathData="M37.9,53 a17,17 0 1 0 34,0 a17,17 0 1 0 -34,0 z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial" android:centerX="54.9" android:centerY="53" android:gradientRadius="17">
+                <item android:offset="0" android:color="#6B3DD68C" />
+                <item android:offset="1" android:color="#003DD68C" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- ב: roof and stem as one stroke, then the base. -->
+    <path android:pathData="M35.1,36 H59.4 Q70.2,36 70.2,46.8 V72" android:strokeWidth="7.2"
+        android:strokeLineCap="round" android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="linear" android:startX="0" android:startY="32" android:endX="0" android:endY="76"
+                android:startColor="#FFE7AE" android:endColor="#E4A02F" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="M31.5,72 H77.4" android:strokeWidth="7.2" android:strokeLineCap="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="linear" android:startX="0" android:startY="32" android:endX="0" android:endY="76"
+                android:startColor="#FFE7AE" android:endColor="#E4A02F" />
+        </aapt:attr>
+    </path>
+    <!-- Red candle: wick, then body. -->
+    <path android:pathData="M42.30,49.90 h0.00 a0.85,0.85 0 0 1 0.85,0.85 v16.00 a0.85,0.85 0 0 1 -0.85,0.85 h-0.00 a0.85,0.85 0 0 1 -0.85,-0.85 v-16.00 a0.85,0.85 0 0 1 0.85,-0.85 z M40.70,54.00 h3.20 a2.3,2.3 0 0 1 2.3,2.3 v6.20 a2.3,2.3 0 0 1 -2.3,2.3 h-3.20 a2.3,2.3 0 0 1 -2.3,-2.3 v-6.20 a2.3,2.3 0 0 1 2.3,-2.3 z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="49" android:endX="0" android:endY="68"
+                android:startColor="#FF988E" android:endColor="#DE443A" />
+        </aapt:attr>
+    </path>
+    <!-- Green candle. -->
+    <path android:pathData="M54.90,42.60 h0.00 a0.85,0.85 0 0 1 0.85,0.85 v22.10 a0.85,0.85 0 0 1 -0.85,0.85 h-0.00 a0.85,0.85 0 0 1 -0.85,-0.85 v-22.10 a0.85,0.85 0 0 1 0.85,-0.85 z M53.30,46.80 h3.20 a2.3,2.3 0 0 1 2.3,2.3 v10.70 a2.3,2.3 0 0 1 -2.3,2.3 h-3.20 a2.3,2.3 0 0 1 -2.3,-2.3 v-10.70 a2.3,2.3 0 0 1 2.3,-2.3 z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="42" android:endX="0" android:endY="67"
+                android:startColor="#7BF5B8" android:endColor="#1FAE6A" />
+        </aapt:attr>
+    </path>
 </vector>
