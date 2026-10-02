@@ -4,13 +4,16 @@
 import type { chart, index, overview, quotes, security, IndexRow, Mover, Quote, Range } from '@/lib/market';
 import type { Hit } from '@/lib/search';
 import type { List, Tracked } from '@/lib/list';
+import type { Order, Paper, Position, Side, Summary, Trade } from '@/lib/account';
 
 export type Overview = Awaited<ReturnType<typeof overview>>;
 export type SecurityDetail = Awaited<ReturnType<typeof security>>;
 export type IndexDetail = Awaited<ReturnType<typeof index>>;
 export type ChartData = Awaited<ReturnType<typeof chart>>;
 export type Quotes = Awaited<ReturnType<typeof quotes>>;
-export type { Hit, IndexRow, List, Mover, Quote, Range, Tracked };
+export type { Hit, IndexRow, List, Mover, Order, Paper, Position, Quote, Range, Side, Summary, Trade, Tracked };
+/** What /api/account answers to an operation: the account after it, and the order it made. */
+export type Operated = Summary & { order: Order | null };
 
 export type Kind = 'security' | 'index';
 export type Ref = { kind: Kind; id: string };

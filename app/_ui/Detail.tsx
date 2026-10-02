@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import type { ChartData, IndexDetail, Range, SecurityDetail, Tracked } from './api';
-import { useResource, type ListState, type Selection } from './hooks';
+import type { ChartData, IndexDetail, Paper, Range, SecurityDetail, Side, Tracked } from './api';
+import { useResource, type AccountState, type ListState, type Selection } from './hooks';
 import * as F from './format';
 import { PriceChart } from './Chart';
 import { Chip, DayRange, Logo, Num, Segmented, Skeleton, tone } from './parts';
@@ -24,8 +24,9 @@ type Common = {
   sel: Selection;
   live: boolean;
   list: ListState;
+  account: AccountState;
   onPick: (s: Selection) => void;
-  onEditHolding: (t: Tracked | (Selection & { symbol?: string | null; type?: string | null; companyId?: string | null })) => void;
+  onTrade: (t: { paper: Paper; side: Side; last: number; liveNow: boolean }) => void;
 };
 
 /** The middle pane: everything about one paper. */
@@ -109,12 +110,9 @@ function Head({ sel, kind, companyId, sub, list, tracked, onFollow, children }: 
       {list.signedIn && (
         <div className="d-actions">
           {children}
-          {/* Un-following a held paper would delete the holding; that is done in the holding editor. */}
-          {!(tracked?.qty && tracked.qty > 0) && (
-            <button type="button" className={`btn ${tracked ? 'on' : ''}`} data-id="toggle-follow" onClick={onFollow}>
-              {tracked ? '★ במעקב' : '☆ מעקב'}
-            </button>
-          )}
+          <button type="button" className={`btn ${tracked ? 'on' : ''}`} data-id="toggle-follow" onClick={onFollow}>
+            {tracked ? '★ במעקב' : '☆ מעקב'}
+          </button>
         </div>
       )}
     </div>
@@ -158,7 +156,7 @@ function Fact({ label, value, toneOf, text = false }: { label: string; value: st
   );
 }
 
-function SecurityView({ sel, live, list, onEditHolding }: Common) {
+function SecurityView({ sel, live, list, account, onTrade }: Common) {
   const path = `/api/security/${sel.id}`;
   const res = useResource<SecurityDetail>(path, live);
   const d = res.dataPath === path ? res.data : null;
@@ -169,8 +167,14 @@ function SecurityView({ sel, live, list, onEditHolding }: Common) {
 
   if (!d) return res.error ? <Failed message={res.error} retry={res.refresh} /> : <DetailSkeleton />;
 
-  const held = tracked && (tracked.qty ?? 0) > 0 ? tracked : null;
-  const hv = held ? holdingValue(held.qty ?? 0, held.avgCost, d.last, d.base) : null;
+  const held = account.data?.positions.find((p) => p.paper.id === d.id) ?? null;
+  const hv = held ? holdingValue(held.qty, held.avgCost, d.last, d.base) : null;
+  const trades = account.data?.trades.filter((t) => t.paper.id === d.id) ?? [];
+  const waiting = account.data?.pending.filter((o) => o.paper.id === d.id) ?? [];
+  const paper: Paper = { id: d.id, name: self.name, symbol: d.symbol, type: d.type, companyId: d.companyId };
+  // Live = the session is open and this paper has traded in it; then an order fills at once.
+  const liveNow = live && d.tradeTime !== null;
+  const trade = (side: Side) => onTrade({ paper, side, last: d.last, liveNow });
 
   return (
     <>
@@ -183,9 +187,18 @@ function SecurityView({ sel, live, list, onEditHolding }: Common) {
         tracked={tracked}
         onFollow={() => (tracked ? list.unfollow(sel) : list.follow(self)).catch(() => undefined)}
       >
-        <button type="button" className="btn primary" data-id="edit-holding" onClick={() => onEditHolding(tracked ?? self)}>
-          {held ? 'עריכת ההחזקה' : 'הוספת החזקה'}
-        </button>
+        {account.data && (
+          <>
+            <button type="button" className="btn primary" data-id="buy" onClick={() => trade('buy')}>
+              קנייה
+            </button>
+            {held && (
+              <button type="button" className="btn sell" data-id="sell" onClick={() => trade('sell')}>
+                מכירה
+              </button>
+            )}
+          </>
+        )}
       </Head>
       <PriceLine last={d.last} unit={d.unit} change={d.change} changePct={d.changePct} tradeDate={d.tradeDate} tradeTime={d.tradeTime} />
       {res.error && <div className="note bad">{res.error} — מוצגים הנתונים האחרונים</div>}
@@ -219,18 +232,46 @@ function SecurityView({ sel, live, list, onEditHolding }: Common) {
         <div className="stack">
           {hv && held && (
             <div className="card">
-              <h2 className="card-title">ההחזקה שלי</h2>
+              <h2 className="card-title">
+                ההחזקה שלי <span className="practice-tag">תרגול</span>
+              </h2>
               <Num flashOn={hv.value} className="holding-value">
                 {F.shekels(hv.value)}
               </Num>
               <div className="muted">
                 <Num>
-                  {F.trimmed(held.qty ?? 0, 4)} × {F.trimmed(d.last)}
+                  {F.trimmed(held.qty, 0)} × {F.trimmed(d.last)}
                 </Num>
               </div>
               <div className="facts">
                 {hv.dayChange != null && <Fact label="היום" value={F.signedShekels(hv.dayChange)} toneOf={hv.dayChange} />}
                 {hv.gain != null && <Fact label="מאז הקנייה" value={`${F.signedShekels(hv.gain)}${hv.gainPct != null ? `  (${F.pct(hv.gainPct)})` : ''}`} toneOf={hv.gain} />}
+                <Fact label="שער קנייה ממוצע" value={`${F.trimmed(held.avgCost)} אג'`} />
+                <Fact label="עלות כולל עמלות" value={F.shekels(held.cost / 100)} />
+              </div>
+            </div>
+          )}
+          {(trades.length > 0 || waiting.length > 0) && (
+            <div className="card">
+              <h2 className="card-title">העסקאות שלי בנייר</h2>
+              <div className="mini-trades">
+                {waiting.map((o) => (
+                  <div key={o.id} className="mini-trade">
+                    <span className={`side ${o.side}`}>{o.side === 'buy' ? 'קנייה' : 'מכירה'}</span>
+                    <Num>{F.trimmed(o.qty, 0)}</Num>
+                    <span className="muted grow">ממתינה לפתיחה</span>
+                  </div>
+                ))}
+                {trades.map((t) => (
+                  <div key={t.id} className="mini-trade">
+                    <span className={`side ${t.side}`}>{t.side === 'buy' ? 'קנייה' : 'מכירה'}</span>
+                    <Num>
+                      {F.trimmed(t.qty, 0)} × {F.trimmed(t.price)}
+                    </Num>
+                    <span className="muted grow">{F.date(t.tradeDate)}{t.how === 'open' ? ' · פתיחה' : ''}</span>
+                    <Num>{F.shekels(t.gross / 100)}</Num>
+                  </div>
+                ))}
               </div>
             </div>
           )}

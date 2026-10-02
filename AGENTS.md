@@ -26,14 +26,21 @@ contract, with units) before changing either side.
   number inside Hebrew text is wrapped in U+2066…U+2069.
 - **Never use an auto-mirrored icon for a chart** — flipped for RTL, a rising line reads
   as a falling one.
-- **The list is on the server** (`lib/list.ts`, `/api/list`), shared by phone and desktop,
-  changed only by single operations. Never write-test against the real file: tests set
-  `BURSA_DATA_DIR` to a temp directory, and so must any manual check.
+- **The list and the trading account are on the server** (`lib/list.ts` → `/api/list`,
+  `lib/account.ts` → `/api/account`), shared by phone and desktop, changed only by single
+  operations. Never write-test against the real files: tests set `BURSA_DATA_DIR` to a temp
+  directory, and so must any manual check.
+- **No typed-in numbers in the account.** The owner chooses only side and quantity; every
+  price is read from the exchange by the server at the moment of the order (or the opening
+  price, for an order that waited). Holdings are derived from trades. Never add a field
+  that lets a client name a price, a date or a holding — that is the whole point of the app.
+- **Practice is labelled wherever money is** ("תרגול" tag). `mode` in `/api/account` is
+  `practice`; real-broker trading would be a separate mode, never a silent switch.
 - **The desktop app is `app/_ui/`** — client components over the same `/api`. Its number
   formatting (`format.ts`) and portfolio maths (`portfolio.ts`) mirror the phone's `Fmt` and
   `PortfolioMath.kt`; change both together, the two test suites carry the same cases.
-- **Holdings are user data.** Removing a held paper asks first (`ConfirmRemoveHolding`);
-  installs are always `-r`, never an uninstall.
+- **The account is user data.** Starting over asks first and keeps the old file beside the
+  new one; installs are always `-r`, never an uninstall.
 - **Lists show a face**: `LogoTile(kind, companyId)`. Logos come from `/api/logo/<companyId>`;
   the exchange answers a company with no logo with a generic PNG, which the route
   rejects (real logos are JPEG) so the tile shows the candlestick mark instead.

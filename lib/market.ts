@@ -42,6 +42,12 @@ export async function isOpen(): Promise<boolean> {
   return Boolean(s.isMarketOpen);
 }
 
+/** The session state as of a few seconds ago — what a trade decides on. */
+async function isOpenFresh(): Promise<boolean> {
+  const s = await tase<RawStatus>('micro', 'tradestatus/tradestatus', 5 * SEC);
+  return Boolean(s.isMarketOpen);
+}
+
 /** Live numbers: short while trading, long once the day is settled. */
 async function liveTtl(): Promise<number> {
   return (await isOpen()) ? 20 * SEC : 5 * MIN;
@@ -242,6 +248,7 @@ type RawSecurity = {
   CompanyName: string | null;
   FullBranch: string | null;
   ISIN: string | null;
+  SuspendStatus: string | null;
   BrutoYield: number | null;
   RedemptionDate: string | null;
   Linkage: string | null;
@@ -249,11 +256,11 @@ type RawSecurity = {
 };
 
 async function rawSecurity(id: string): Promise<RawSecurity> {
-  const raw = await tase<RawSecurity | null>(
-    'api',
-    `company/securitydata?securityId=${bareId(id)}&lang=0`,
-    await liveTtl(),
-  );
+  return rawSecurityWithin(id, await liveTtl());
+}
+
+async function rawSecurityWithin(id: string, ttl: number): Promise<RawSecurity> {
+  const raw = await tase<RawSecurity | null>('api', `company/securitydata?securityId=${bareId(id)}&lang=0`, ttl);
   if (!raw || raw.LastRate === null || raw.LastRate === undefined || !raw.Name) {
     throw new TaseError(`נייר ${bareId(id)} לא נמצא בבורסה`, 404);
   }
@@ -276,6 +283,48 @@ function securityQuote(r: RawSecurity): Quote {
     tradeDate: isoDate(r.TradeDate),
     tradeTime: clock(r.TradeTime) ?? clock(r.LastDealTime),
     companyId: r.CompanyId ? String(r.CompanyId) : null,
+  };
+}
+
+/**
+ * What a trade needs to know about a security, read fresh (a few seconds old at most):
+ * the price it would fill at now, the day's opening price, and whether it is trading.
+ */
+export type TradeQuote = {
+  id: string;
+  name: string;
+  symbol: string | null;
+  type: string | null;
+  companyId: string | null;
+  /** Agorot. */
+  last: number;
+  /** Agorot; the opening auction's price of `tradeDate`, null before it has opened. */
+  open: number | null;
+  tradeDate: string | null;
+  /** "HH:MM" of the last trade while the session runs; null once it is end-of-day. */
+  tradeTime: string | null;
+  marketOpen: boolean;
+  /** The exchange has halted trading in this paper. */
+  suspended: boolean;
+};
+
+const TRADE_TTL = 3 * SEC;
+
+export async function tradeQuote(id: string): Promise<TradeQuote> {
+  const [marketOpen, r] = await Promise.all([isOpenFresh(), rawSecurityWithin(id, TRADE_TTL)]);
+  const q = securityQuote(r);
+  return {
+    id: q.id,
+    name: q.name,
+    symbol: q.symbol,
+    type: q.type,
+    companyId: q.companyId,
+    last: q.last,
+    open: num(r.OpenRate),
+    tradeDate: q.tradeDate,
+    tradeTime: q.tradeTime,
+    marketOpen,
+    suspended: Boolean(r.SuspendStatus),
   };
 }
 

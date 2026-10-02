@@ -1267,4 +1267,187 @@
     gap: 8px;
     margin-top: 4px;
   }
+
+  /* ── trading (practice account) ─────────────────────────────────────────── */
+  /* "Practice" is said wherever money is: a small gold-outlined tag, never a colour that means up/down. */
+  .practice-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gold);
+    border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+    border-radius: 999px;
+    padding: 1px 8px;
+    vertical-align: middle;
+  }
+  .practice-tag.on-hero {
+    background: color-mix(in srgb, var(--gold) 14%, transparent);
+  }
+  .hero-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .hero-aside {
+    color: var(--on-hero-muted);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .first-steps {
+    margin: 12px 4px 0;
+    line-height: 1.6;
+  }
+  .side {
+    font-size: 11.5px;
+    font-weight: 700;
+    border-radius: 6px;
+    padding: 0 6px;
+  }
+  .side.buy {
+    color: var(--gold);
+    background: color-mix(in srgb, var(--gold) 13%, transparent);
+  }
+  .side.sell {
+    color: #9fc2ff;
+    background: color-mix(in srgb, #6fa8ff 16%, transparent);
+  }
+  .activity .act {
+    padding: 7px 8px;
+    border-radius: 11px;
+    gap: 10px;
+    transition: background 0.12s;
+  }
+  .activity .act:hover {
+    background: var(--hover);
+  }
+  .link.more {
+    margin: 6px 8px 0;
+  }
+  .pane-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 18px;
+  }
+  .start-over {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .btn.sell {
+    border-color: color-mix(in srgb, #6fa8ff 60%, transparent);
+    color: #9fc2ff;
+  }
+  .btn.primary.sell {
+    background: #6fa8ff;
+    border-color: #6fa8ff;
+    color: #04142e;
+  }
+  .btn.primary.sell:hover:not(:disabled) {
+    background: color-mix(in srgb, #6fa8ff 85%, white);
+  }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .dialog.trade {
+    width: min(460px, calc(100vw - 32px));
+  }
+  .trade-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .trade-head h2 {
+    line-height: 1.25;
+  }
+  .trade-price {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 14px;
+  }
+  .trade-price .strong {
+    font-size: 22px;
+  }
+  .qty-row {
+    display: flex;
+    gap: 8px;
+  }
+  .qty-row input {
+    font-size: 18px;
+  }
+  .trade-sum {
+    display: grid;
+    gap: 5px;
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+  .trade-sum > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--muted);
+  }
+  .trade-sum > div .num {
+    color: var(--ink);
+  }
+  .trade-sum .total {
+    border-top: 1px solid var(--line);
+    padding-top: 7px;
+    margin-top: 2px;
+    font-weight: 700;
+    font-size: 14.5px;
+    color: var(--ink);
+  }
+  .trade-when {
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.55;
+    border-inline-start: 3px solid var(--line-strong);
+    padding-inline-start: 10px;
+  }
+  .trade-when.now {
+    border-color: var(--up);
+  }
+  .outcome {
+    display: grid;
+    gap: 6px;
+    border-radius: 14px;
+    padding: 14px 16px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .outcome strong {
+    font-size: 17px;
+  }
+  .outcome.ok {
+    background: var(--up-soft);
+  }
+  .outcome.ok strong {
+    color: var(--up);
+  }
+  .outcome.wait {
+    background: var(--flat-soft);
+  }
+  .outcome.bad {
+    background: var(--down-soft);
+  }
+  .outcome.bad strong {
+    color: var(--down);
+  }
+  .mini-trades {
+    display: grid;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .mini-trade {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
 }

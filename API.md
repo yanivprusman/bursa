@@ -2,11 +2,12 @@
 
 The server behind the phone app and the desktop page.
 
-- **Market data** — every route below except `/api/list` and `/api/session` — is
-  open and read-only: it is what the exchange already publishes.
-- **The owner's list** (`/api/list`) is the one private thing here and the one
-  thing clients write. It needs `Authorization: Bearer <BURSA_API_TOKEN>` (the
-  phone) or the session cookie a browser gets by signing in.
+- **Market data** — every route below except `/api/list`, `/api/account` and
+  `/api/session` — is open and read-only: it is what the exchange already publishes.
+- **The owner's list** (`/api/list`) and **trading account** (`/api/account`) are
+  the private things here and the only things clients write. They need
+  `Authorization: Bearer <BURSA_API_TOKEN>` (the phone) or the session cookie a
+  browser gets by signing in.
 
 A failure is `{ "error": "<message>" }` with a 4xx/5xx status.
 
@@ -47,25 +48,68 @@ close derived from a rounded percentage would be wrong in the second decimal.
 ## The list
 
 `GET /api/list` → `{ rev, updatedAt, items[] }`. An item is
-`{ kind, id, name, symbol, type, companyId, qty, avgCost }`; `qty` is null for a
-paper that is only followed, `avgCost` (agorot) is null when it was not entered.
+`{ kind, id, name, symbol, type, companyId }` — a paper that is followed. What is
+**held** is not in the list: holdings come only from trades (`/api/account`).
 
 `POST /api/list` takes ONE operation and returns the list after it:
 
 | Body | Effect |
 | :--- | :--- |
 | `{ "op": "follow", "item": {kind,id,name,…} }` | add if absent |
-| `{ "op": "unfollow", "kind", "id" }` | remove (and its holding with it) |
-| `{ "op": "hold", "item": {…}, "qty", "avgCost" }` | set a holding; follows if needed. Not for an index |
-| `{ "op": "clearHolding", "kind", "id" }` | drop the holding, keep following |
-| `{ "op": "import", "items": [...] }` | take the items this list does not have yet; change nothing that is here |
+| `{ "op": "unfollow", "kind", "id" }` | remove |
+| `{ "op": "import", "items": [...] }` | take the items this list does not have yet; change nothing that is here. A `qty`/`avgCost` that comes along is ignored |
+
+`hold` and `clearHolding` (typing a holding in) are gone and answer **410**.
 
 Operations, not whole lists, so the phone and the desktop can both be open and
 neither overwrites what the other just did. `rev` only moves when something changed.
 
-The list is one JSON file: `$AUTOMATE_LINUX_DIR/data/bursa/<dev|prod>/list.json`
-(`BURSA_DATA_DIR` overrides the directory — the tests use that). A file that is
-there but unreadable is reported, never treated as empty.
+## The trading account
+
+A practice account: **pretend cash, real prices**. It starts with ₪100,000 and
+trades at the exchange's own prices. A client never sends a price — only "buy 10
+of 629014" — and the server reads the price from the exchange at that moment.
+
+`GET /api/account` → the account, after filling every waiting order that may now
+be filled:
+
+| Field | |
+| :--- | :--- |
+| `mode` | `"practice"` (the only mode; a real broker would be another) |
+| `startCash`, `cash`, `available` | agorot. `available` = `cash` less what waiting buys hold back |
+| `positions[]` | `{ paper, qty, cost, avgCost }` — derived from the trades; `cost` (agorot) includes buy fees, `avgCost` is agorot per unit |
+| `realized`, `fees` | agorot, over the account's life |
+| `pending[]` | waiting orders, newest first |
+| `orders[]` | closed orders (filled / cancelled / rejected, with `reason`), newest first, at most 100 |
+| `trades[]` | `{ id, orderId, side, paper, qty, price, gross, fee, at, tradeDate, how }`, newest first. `how` = `live` (last price during the session) or `open` (opening price) |
+| `unsettled[]` | waiting orders whose paper could not be priced on this read; retried on the next |
+| `rules` | `{ feeRate, feeMin }` — commission 0.1%, at least ₪5 (500 agorot) |
+
+`paper` = `{ id, name, symbol, type, companyId }`.
+
+`POST /api/account` takes ONE operation and returns the account after it, plus `order`:
+
+| Body | Effect |
+| :--- | :--- |
+| `{ "op": "order", "side": "buy"\|"sell", "id": "629014", "qty": 10 }` | a market order. `qty` is a whole number |
+| `{ "op": "cancel", "orderId" }` | cancel a waiting order |
+| `{ "op": "reset", "confirm": true }` | back to ₪100,000; the old account is kept as `account-until-<time>.json` |
+
+**When an order fills** — what a broker does with a market order:
+
+- the session is open and the paper has traded today → **now, at its last price**;
+- otherwise → it **waits** and fills at the **opening price** of the first trading
+  day on or after `fillFrom`. A paper that already traded today and has closed gets
+  tomorrow's date — never today's opening, which is in the past.
+
+A buy that costs more than the free cash, or a sell of more units than are held
+(less those already waiting to be sold), is refused (409). A waiting buy whose
+opening price turns out too expensive for the cash is **rejected**, never filled
+into debt. No short selling, no indices (an index is not a security — buy an ETF).
+
+The list and the account are JSON files in `$AUTOMATE_LINUX_DIR/data/bursa/<dev|prod>/`
+(`list.json`, `account.json`; `BURSA_DATA_DIR` overrides the directory — the tests
+use that). A file that is there but unreadable is reported, never treated as empty.
 
 ## Signing a browser in
 

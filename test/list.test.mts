@@ -19,55 +19,38 @@ test('follow adds once; following again changes nothing', async () => {
   const a = await change({ op: 'follow', item: teva });
   assert.equal(a.rev, 1);
   assert.equal(a.items.length, 1);
-  assert.equal(a.items[0].qty, null);
   const b = await change({ op: 'follow', item: teva });
   assert.equal(b.rev, 1, 'a no-op must not bump the revision');
 });
 
-test('hold sets a holding and keeps the name the paper was followed under', async () => {
-  const l = await change({ op: 'hold', item: { ...teva, name: 'other name' }, qty: 50, avgCost: 10000 });
-  assert.equal(l.items[0].qty, 50);
-  assert.equal(l.items[0].avgCost, 10000);
-  assert.equal(l.items[0].name, 'טבע');
-});
-
-test('hold without a purchase price is a value with no gain', async () => {
-  const l = await change({ op: 'hold', item: teva, qty: 10 });
-  assert.equal(l.items[0].qty, 10);
-  assert.equal(l.items[0].avgCost, null);
-});
-
-test('an index can be followed but not held', async () => {
-  await change({ op: 'follow', item: ta35 });
-  await assert.rejects(change({ op: 'hold', item: ta35, qty: 1 }), ListError);
-});
-
-test('bad quantities are refused and nothing is written', async () => {
+test('typing a holding in is refused: holdings come only from trades', async () => {
   const before = (await readList()).rev;
-  for (const qty of [0, -5, 'ten', null, Infinity]) {
-    await assert.rejects(change({ op: 'hold', item: teva, qty }), ListError);
-  }
+  await assert.rejects(change({ op: 'hold', item: teva, qty: 50, avgCost: 10000 }), (e: Error & { status?: number }) => e.status === 410);
+  await assert.rejects(change({ op: 'clearHolding', kind: 'security', id: '629014' }), ListError);
   assert.equal((await readList()).rev, before);
 });
 
-test('clearHolding keeps following; unfollow removes', async () => {
-  const cleared = await change({ op: 'clearHolding', kind: 'security', id: '629014' });
-  assert.equal(cleared.items.find((x) => x.id === '629014')?.qty, null);
+test('unfollow removes', async () => {
+  await change({ op: 'follow', item: ta35 });
   const gone = await change({ op: 'unfollow', kind: 'security', id: '629014' });
   assert.equal(gone.items.some((x) => x.id === '629014'), false);
+  assert.equal(gone.items.some((x) => x.id === '142'), true);
 });
 
-test('import takes only what is not here yet and never changes what is', async () => {
-  await change({ op: 'hold', item: teva, qty: 7 });
+test('import takes only what is not here yet, and drops typed-in quantities', async () => {
+  await change({ op: 'follow', item: { ...teva, name: 'טבע' } });
   const l = await change({
     op: 'import',
     items: [
-      { ...teva, qty: 999, avgCost: 1 },
+      { ...teva, name: 'renamed', qty: 999, avgCost: 1 },
       { kind: 'security', id: '604611', name: 'לאומי', qty: 100, avgCost: 7000 },
     ],
   });
-  assert.equal(l.items.find((x) => x.id === '629014')?.qty, 7);
-  assert.equal(l.items.find((x) => x.id === '604611')?.qty, 100);
+  assert.equal(l.items.find((x) => x.id === '629014')?.name, 'טבע');
+  const leumi = l.items.find((x) => x.id === '604611') as Record<string, unknown>;
+  assert.ok(leumi);
+  assert.equal('qty' in leumi, false);
+  assert.equal('avgCost' in leumi, false);
 });
 
 test('two changes at once both land', async () => {
@@ -91,7 +74,7 @@ test('a damaged file is reported, never overwritten', async () => {
 });
 
 test('apply is pure: an unknown op throws, a no-op returns the same array', () => {
-  const items = [{ ...teva, qty: null, avgCost: null }] as Parameters<typeof apply>[0];
+  const items = [teva] as Parameters<typeof apply>[0];
   assert.throws(() => apply(items, { op: 'nonsense' }), ListError);
   assert.equal(apply(items, { op: 'follow', item: teva }), items);
 });

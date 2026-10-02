@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, getJson, parseKey, postJson, refKey, type Kind, type List, type Ref, type Tracked } from './api';
+import { ApiError, getJson, parseKey, postJson, refKey, type Kind, type List, type Operated, type Order, type Ref, type Side, type Summary, type Tracked } from './api';
 
 /** How often a visible page re-reads live numbers while the exchange is trading. */
 const LIVE_MS = 30_000;
@@ -117,8 +117,6 @@ export type ListState = {
   find: (kind: Kind, id: string) => Tracked | undefined;
   follow: (item: Selection & { symbol?: string | null; type?: string | null; companyId?: string | null }) => Promise<void>;
   unfollow: (ref: Ref) => Promise<void>;
-  hold: (item: Selection & { symbol?: string | null; type?: string | null; companyId?: string | null }, qty: number, avgCost: number | null) => Promise<void>;
-  clearHolding: (ref: Ref) => Promise<void>;
   signIn: (code: string) => Promise<string | null>;
   signOut: () => Promise<void>;
 };
@@ -197,8 +195,6 @@ export function useList(): ListState {
     find: (kind, id) => items.find((x) => x.kind === kind && x.id === id),
     follow: (item) => run({ op: 'follow', item: asItem(item) }),
     unfollow: (ref) => run({ op: 'unfollow', kind: ref.kind, id: ref.id }),
-    hold: (item, qty, avgCost) => run({ op: 'hold', item: asItem(item), qty, avgCost }),
-    clearHolding: (ref) => run({ op: 'clearHolding', kind: ref.kind, id: ref.id }),
     signIn: async (code) => {
       try {
         await postJson('/api/session', { code });
@@ -213,6 +209,66 @@ export function useList(): ListState {
       await getJson('/api/session', { method: 'DELETE' });
       setSignedIn(false);
       setItems([]);
+    },
+  };
+}
+
+export type AccountState = {
+  data: Summary | null;
+  error: string | null;
+  /** A market order. Resolves with the order as the server left it: filled, waiting or rejected. */
+  order: (side: Side, id: string, qty: number) => Promise<Order>;
+  cancel: (orderId: string) => Promise<void>;
+  reset: () => Promise<void>;
+};
+
+/**
+ * The practice trading account. Read every LIVE_MS while visible — each read is also what
+ * fills a waiting order once its paper has opened.
+ */
+export function useAccount(signedIn: boolean | null): AccountState {
+  const [data, setData] = useState<Summary | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    getJson<Summary>('/api/account').then(
+      (a) => {
+        setData(a);
+        setError(null);
+      },
+      (e: Error) => setError(e.message),
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!signedIn) return;
+    load();
+    const tick = () => !document.hidden && load();
+    const timer = setInterval(tick, LIVE_MS);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [signedIn, load]);
+
+  const run = useCallback(async (op: unknown) => {
+    const after = await postJson<Operated>('/api/account', op);
+    setData(after);
+    setError(null);
+    return after;
+  }, []);
+
+  return {
+    // Signed out, the last account read is not shown.
+    data: signedIn ? data : null,
+    error,
+    order: async (side, id, qty) => (await run({ op: 'order', side, id, qty })).order!,
+    cancel: async (orderId) => {
+      await run({ op: 'cancel', orderId });
+    },
+    reset: async () => {
+      await run({ op: 'reset', confirm: true });
     },
   };
 }

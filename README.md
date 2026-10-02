@@ -1,7 +1,9 @@
 # בורסה (bursa)
 
-The Tel Aviv Stock Exchange on the phone: the market at a glance, any security or
-index one search away, a watchlist, and what your own holdings are worth today.
+The Tel Aviv Stock Exchange on the phone and the desktop: the market at a glance,
+any security or index one search away, a watchlist — and a **practice trading
+account**: ₪100,000 of pretend money to buy and sell with, at the exchange's real
+prices.
 
 | | |
 | :--- | :--- |
@@ -15,8 +17,15 @@ index one search away, a watchlist, and what your own holdings are worth today.
 - **שוק** — the headline indices with a month of closes each, how many of ת"א-125
   rose and fell, the day's biggest risers, fallers and most-traded, and the
   session's turnover. Every index the exchange publishes is one tap further.
-- **שלי** — what you follow and what you hold. With holdings, the first thing on
-  screen is what the portfolio is worth and what today did to it, in shekels.
+- **שלי** — the practice account first: what it is worth, how far it is from the
+  ₪100,000 it started with, what today did to it, the free cash. Then the holdings,
+  orders waiting for the opening, the watchlist, and the latest trades.
+- **Trading** — on any share, ETF or bond: **קנייה** / **מכירה**, a quantity, and
+  that is all you choose. The price is the exchange's: while the paper trades, the
+  order fills at once at its last price; when it does not (evenings, weekends,
+  before the opening), it waits and fills at the next **opening price** — what a
+  broker does with a market order. A commission of 0.1% (at least ₪5) is charged on
+  every trade. There is no way to type a price or a holding in.
 - **A security / an index** — price, a chart you can slide a finger along (a day
   to five years), the day's trading facts, the company, and for an index
   everything in it by weight.
@@ -44,8 +53,8 @@ down. Gold is the brand accent and never marks a number that moved.
 
 ## The desktop version
 
-One screen, three panes: **your list** on the right (portfolio worth, holdings,
-watchlist), **the chosen paper** in the middle (price, a chart with a crosshair,
+One screen, three panes: **your side** on the right (the practice account, holdings,
+waiting orders, watchlist, latest trades), **the chosen paper** in the middle (price, a chart with a crosshair,
 the day's range, trading facts, and for an index everything in it as a table),
 **the market** on the left (indices, the day's mood, movers). The ticker runs
 across the top; `/` jumps to search; the chosen paper is in the address bar
@@ -56,11 +65,11 @@ within half a minute.
 
 ## Where things live
 
-**One list, on your own server.** The watchlist and the holdings are kept in one
-JSON file on this machine (`data/bursa/<dev|prod>/list.json` under automateLinux)
-and shared by the phone and the desktop. The phone keeps a copy so it opens with
-the list at once and still shows it with no connection. It is the only private
-thing the server holds, and it is guarded: the phone sends `BURSA_API_TOKEN` as a
+**On your own server.** The watchlist and the trading account are two JSON files
+on this machine (`data/bursa/<dev|prod>/list.json` and `account.json` under
+automateLinux), shared by the phone and the desktop. The phone keeps a copy of the
+list so it opens at once and still shows it with no connection. They are the only
+private things the server holds, and they are guarded: the phone sends `BURSA_API_TOKEN` as a
 bearer token (baked into the APK from the gitignored `mobile/.env`), and a browser
 signs in once — paste the token, or use a timed link:
 
@@ -99,3 +108,11 @@ androidDeploy bursa                           # build the dev flavor and install
 
 Not covered yet: mutual funds (קרנות נאמנות that do not trade on the exchange) —
 they live on a different exchange system (Maya) behind a bot check.
+
+## Real trading — not yet
+
+Orders go to the practice account only (`mode: "practice"` in `/api/account`). The
+exchange itself takes no orders from individuals; real trades go through a broker,
+and a broker with a public trading API that reaches the Tel Aviv exchange is what
+would plug in behind the same buttons as a second mode — labelled, and never a
+silent switch from practice.

@@ -9,7 +9,7 @@ import { Logo } from './parts';
  * Search by Hebrew or English name, symbol, security number or ISIN. Results drop under
  * the field; arrows move, Enter opens, Escape closes. "/" focuses the field from anywhere.
  */
-export function Search({ onPick, list }: { onPick: (s: Selection) => void; list: ListState }) {
+export function Search({ onPick, list, heldIds }: { onPick: (s: Selection) => void; list: ListState; heldIds: Set<string> }) {
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<Hit[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -130,7 +130,7 @@ export function Search({ onPick, list }: { onPick: (s: Selection) => void; list:
                   </span>
                 </button>
                 {list.signedIn &&
-                  (mine?.qty ? (
+                  (h.kind === 'security' && heldIds.has(h.id) ? (
                     <span className="in-portfolio">בתיק</span>
                   ) : (
                     <button
