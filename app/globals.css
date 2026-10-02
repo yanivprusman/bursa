@@ -755,8 +755,9 @@
     padding: 2px;
     box-shadow: -10px 0 12px 2px var(--hover);
   }
+  /* :focus-visible, not :focus-within — a row that was merely clicked keeps its numbers. */
   .row.has-actions:hover .row-actions,
-  .row.has-actions:focus-within .row-actions {
+  .row.has-actions:has(:focus-visible) .row-actions {
     opacity: 1;
     pointer-events: auto;
   }

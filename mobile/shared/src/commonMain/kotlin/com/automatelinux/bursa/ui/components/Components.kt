@@ -532,22 +532,24 @@ fun SyncNotice(message: String, onRetry: () -> Unit, onDismiss: () -> Unit, modi
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
             .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.inverseSurface)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
             .testTag("sync-notice"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Icon(Icons.Filled.CloudOff, null, Modifier.size(18.dp), tint = Bursa.colors.down)
+        Spacer(Modifier.width(10.dp))
         Text(
             message,
             Modifier.weight(1f).padding(vertical = 8.dp),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.inverseOnSurface,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         TextButton(onClick = onRetry, modifier = Modifier.testTag("sync-retry")) {
-            Text("נסו שוב", color = MaterialTheme.colorScheme.inversePrimary)
+            Text("נסו שוב", color = Bursa.colors.accent)
         }
         TextButton(onClick = onDismiss, modifier = Modifier.testTag("sync-dismiss")) {
-            Text("סגירה", color = MaterialTheme.colorScheme.inverseOnSurface)
+            Text("סגירה", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

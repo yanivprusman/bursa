@@ -38,6 +38,9 @@ class Portfolio(private val store: KeyValueStore, private val api: Api, private 
     var syncError by mutableStateOf<String?>(null)
         private set
 
+    /** What "try again" does: re-send the change that failed, or fetch the list again. */
+    private var again: (() -> Unit)? = null
+
     init {
         val saved = store.get(KEY)?.let { runCatching { json.decodeFromString(Saved.serializer(), it) }.getOrNull() }
         if (saved != null) {
@@ -88,6 +91,7 @@ class Portfolio(private val store: KeyValueStore, private val api: Api, private 
                 if (list.items != before) onChanged()
             } catch (e: Exception) {
                 syncError = e.message ?: "משהו השתבש"
+                again = { sync(onChanged) }
             }
         }
     }
@@ -105,6 +109,8 @@ class Portfolio(private val store: KeyValueStore, private val api: Api, private 
             } catch (e: Exception) {
                 replace(before)
                 syncError = "השינוי לא נשמר — ${e.message ?: "משהו השתבש"}"
+                // The same change, exactly: a failed write is offered again, never dropped.
+                again = { change(op, onDone, optimistic) }
             }
         }
     }
@@ -149,7 +155,17 @@ class Portfolio(private val store: KeyValueStore, private val api: Api, private 
         }
     }
 
-    fun dismissError() { syncError = null }
+    fun dismissError() {
+        syncError = null
+        again = null
+    }
+
+    fun retry() {
+        val redo = again ?: return
+        again = null
+        syncError = null
+        redo()
+    }
 
     fun opened(t: Tracked) {
         recent.removeAll { refKey(it.kind, it.id) == t.key }

@@ -9,6 +9,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -88,10 +89,10 @@ fun App(
                     app.portfolio.syncError?.let { message ->
                         SyncNotice(
                             message,
-                            onRetry = { app.portfolio.sync(onChanged = { app.refreshQuotes() }) },
+                            onRetry = { app.portfolio.retry() },
                             onDismiss = { app.portfolio.dismissError() },
-                            // Clear of the system bar and of the home screen's tab bar.
-                            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 84.dp),
+                            // Clear of the keyboard, the system bar and the home screen's tab bar.
+                            modifier = Modifier.align(Alignment.BottomCenter).imePadding().navigationBarsPadding().padding(bottom = 84.dp),
                         )
                     }
                 }
