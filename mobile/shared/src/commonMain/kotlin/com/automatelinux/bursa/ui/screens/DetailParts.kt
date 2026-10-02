@@ -165,7 +165,9 @@ fun ChartBlock(kind: String, id: String, unit: String) {
                 }
             }
             // The chart has no price axis; its lowest and highest points are named here instead.
-            if (at == null && points.size >= 2) {
+            // Not for the day: the exchange's official daily range is in the card below, and it
+            // leaves out trades this line includes.
+            if (at == null && points.size >= 2 && !intraday) {
                 Spacer(Modifier.weight(1f))
                 Num(
                     Fmt.price(points.minOf { it.v }, unit) + " – " + Fmt.price(points.maxOf { it.v }, unit),

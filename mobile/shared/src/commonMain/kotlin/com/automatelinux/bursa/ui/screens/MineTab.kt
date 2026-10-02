@@ -134,7 +134,8 @@ fun MineTab() {
                 }
             }
 
-            if (portfolio.items.isNotEmpty() && holdings.isEmpty()) {
+            // Only worth saying when something on the list can actually be held (an index cannot).
+            if (holdings.isEmpty() && watching.any { it.kind != INDEX }) {
                 item {
                     Text(
                         "מחזיקים באחד מהם? לחיצה ארוכה על השורה ← \"הוספת החזקה\", ושווי התיק יופיע כאן למעלה.",
@@ -173,7 +174,7 @@ private fun Welcome() {
             Text("הרשימה שלך", style = MaterialTheme.typography.titleLarge, color = c.onHero)
             Spacer(Modifier.height(6.dp))
             Text(
-                "הוסיפו ניירות למעקב בלחיצה על +. הזינו כמה אתם מחזיקים — וכאן יופיעו שווי התיק והשינוי היומי בשקלים.",
+                "הוסיפו ניירות למעקב מהרשימה שלמטה או מהחיפוש. הזינו כמה אתם מחזיקים — וכאן יופיעו שווי התיק והשינוי היומי בשקלים.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = c.onHeroMuted,
             )
