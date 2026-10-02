@@ -1,7 +1,8 @@
 package com.automatelinux.bursa.ui.screens
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -27,7 +29,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.automatelinux.bursa.data.LocalApp
+import com.automatelinux.bursa.data.model.BUY
+import com.automatelinux.bursa.data.model.Paper
 import com.automatelinux.bursa.data.model.SECURITY
+import com.automatelinux.bursa.data.model.SELL
 import com.automatelinux.bursa.data.model.SecurityDetail
 import com.automatelinux.bursa.data.model.Tracked
 import com.automatelinux.bursa.data.rememberResource
@@ -54,8 +59,9 @@ fun SecurityScreen(id: String, name: String) {
     // under wins: search calls an ETF by its full name, the quote by a clipped one.
     val self = Tracked(SECURITY, id, name, d?.symbol, d?.type, companyId = d?.companyId)
 
-    var editing by remember { mutableStateOf(false) }
-    var removing by remember { mutableStateOf(false) }
+    val account = app.account.summary
+    val held = account?.position(id)
+    var ticket by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(id) { portfolio.opened(Tracked(SECURITY, id, name)) }
     LaunchedEffect(d) { d?.let { app.learn(it.quote()) } }
@@ -65,10 +71,11 @@ fun SecurityScreen(id: String, name: String) {
         contentWindowInsets = WindowInsets(0),
         topBar = {
             DetailBar(name, SECURITY, d?.companyId ?: tracked?.companyId, followed = tracked != null) {
-                when {
-                    tracked == null -> { portfolio.follow(self); app.refreshQuotes() }
-                    tracked.held -> removing = true
-                    else -> portfolio.unfollow(SECURITY, id)
+                if (tracked == null) {
+                    portfolio.follow(self)
+                    app.refreshQuotes()
+                } else {
+                    portfolio.unfollow(SECURITY, id)
                 }
             }
         },
@@ -90,13 +97,31 @@ fun SecurityScreen(id: String, name: String) {
                     ChartBlock(SECURITY, id, d.unit)
                 }
 
-                item {
-                    Box(Modifier.padding(horizontal = 16.dp).padding(top = 18.dp)) {
-                        if (tracked?.held == true) {
-                            HoldingCard(tracked, d.quote(), onEdit = { editing = true })
-                        } else {
-                            OutlinedButton(onClick = { editing = true }, modifier = Modifier.fillMaxWidth().testTag("add-holding")) {
-                                Text("יש לי מהנייר הזה — הוספת החזקה")
+                if (account != null) {
+                    item {
+                        Row(Modifier.padding(horizontal = 16.dp).padding(top = 18.dp)) {
+                            Button(onClick = { ticket = BUY }, modifier = Modifier.weight(1f).testTag("buy")) { Text("קנייה") }
+                            if (held != null) {
+                                Spacer(Modifier.width(10.dp))
+                                OutlinedButton(onClick = { ticket = SELL }, modifier = Modifier.weight(1f).testTag("sell")) {
+                                    Text("מכירה", color = SellBlue)
+                                }
+                            }
+                        }
+                    }
+                    if (held != null) {
+                        item { PositionCard(held, d.quote(), Modifier.padding(horizontal = 16.dp).padding(top = 12.dp)) }
+                    }
+                    val mine = account.trades.filter { it.paper.id == id }
+                    val waiting = account.pending.filter { it.paper.id == id }
+                    if (mine.isNotEmpty() || waiting.isNotEmpty()) {
+                        item { SectionTitle("העסקאות שלי בנייר") }
+                        item {
+                            Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = PaddingValues(vertical = 6.dp)) {
+                                Column {
+                                    waiting.forEach { OrderRow(it, cancellable = true) }
+                                    mine.forEach { TradeRow(it, showName = false) }
+                                }
                             }
                         }
                     }
@@ -148,9 +173,16 @@ fun SecurityScreen(id: String, name: String) {
         }
     }
 
-    if (editing) HoldingSheet(tracked ?: self, d?.last, onDone = { editing = false })
-    if (removing && tracked != null) {
-        ConfirmRemoveHolding(tracked, onConfirm = { portfolio.unfollow(SECURITY, id); removing = false }, onDismiss = { removing = false })
+    val side = ticket
+    if (side != null && d != null) {
+        TradeSheet(
+            Paper(id, self.name, d.symbol, d.type, d.companyId),
+            side,
+            d.last,
+            // Live = the session is open and this paper has traded in it; then an order fills at once.
+            liveNow = app.marketOpen && d.tradeTime != null,
+            onDone = { ticket = null },
+        )
     }
 }
 

@@ -194,8 +194,8 @@ data class ErrorResponse(val error: String = "")
 // ── what stays on the phone ─────────────────────────────────────────────────
 
 /**
- * One thing the user follows. With [qty] it is also a holding: [qty] units bought at
- * [avgCost] agorot each (the cost is optional — without it there is a value but no gain).
+ * One thing the user follows. What is HELD is not here: holdings come only from trades in
+ * the practice account ([AccountSummary.positions]).
  */
 @Serializable
 data class Tracked(
@@ -204,12 +204,9 @@ data class Tracked(
     val name: String,
     val symbol: String? = null,
     val type: String? = null,
-    val qty: Double? = null,
-    val avgCost: Double? = null,
     val companyId: String? = null,
 ) {
     val key: String get() = refKey(kind, id)
-    val held: Boolean get() = (qty ?: 0.0) > 0
 }
 
 /** The owner's list as the server keeps it (`/api/list`). */
@@ -218,3 +215,71 @@ data class ListResponse(val rev: Int = 0, val items: List<Tracked> = emptyList()
 
 @Serializable
 data class Saved(val items: List<Tracked> = emptyList(), val recent: List<Tracked> = emptyList())
+
+// ── the practice trading account (`/api/account`) ───────────────────────────
+// Money is in agorot, as the server keeps it.
+
+@Serializable
+data class Paper(val id: String, val name: String, val symbol: String? = null, val type: String? = null, val companyId: String? = null) {
+    val key: String get() = refKey(SECURITY, id)
+    fun tracked() = Tracked(SECURITY, id, name, symbol, type, companyId)
+}
+
+@Serializable
+data class Position(val paper: Paper, val qty: Double, val cost: Double, val avgCost: Double)
+
+@Serializable
+data class Order(
+    val id: String,
+    val side: String,
+    val paper: Paper,
+    val qty: Double,
+    val placedAt: String,
+    val fillFrom: String,
+    val status: String,
+    val reason: String? = null,
+    val reserve: Double = 0.0,
+    val closedAt: String? = null,
+)
+
+@Serializable
+data class Trade(
+    val id: String,
+    val orderId: String,
+    val side: String,
+    val paper: Paper,
+    val qty: Double,
+    val price: Double,
+    val gross: Double,
+    val fee: Double,
+    val at: String,
+    val tradeDate: String? = null,
+    val how: String,
+)
+
+@Serializable
+data class TradeRules(val feeRate: Double = 0.001, val feeMin: Double = 500.0)
+
+@Serializable
+data class AccountSummary(
+    val mode: String = "practice",
+    val rev: Int = 0,
+    val startCash: Double,
+    val cash: Double,
+    val available: Double,
+    val positions: List<Position> = emptyList(),
+    val realized: Double = 0.0,
+    val fees: Double = 0.0,
+    val pending: List<Order> = emptyList(),
+    val orders: List<Order> = emptyList(),
+    val trades: List<Trade> = emptyList(),
+    val rules: TradeRules = TradeRules(),
+    /** Only on an answer to an operation: the order it made, as the server left it. */
+    val order: Order? = null,
+) {
+    fun position(id: String): Position? = positions.firstOrNull { it.paper.id == id }
+    fun holds(id: String): Boolean = position(id) != null
+}
+
+const val BUY = "buy"
+const val SELL = "sell"

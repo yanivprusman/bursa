@@ -41,6 +41,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.automatelinux.bursa.data.LocalApp
 import com.automatelinux.bursa.data.encodeQuery
+import com.automatelinux.bursa.data.model.SECURITY
 import com.automatelinux.bursa.data.model.Hit
 import com.automatelinux.bursa.data.model.SearchResponse
 import com.automatelinux.bursa.data.model.Tracked
@@ -179,8 +180,8 @@ private fun ResultRow(t: Tracked) {
         )
         Spacer(Modifier.width(8.dp))
         when {
-            // Un-following a held paper would delete the holding; that is done on its own page.
-            existing?.held == true -> Text(
+            // Held in the practice account: a holding is not something a follow button changes.
+            t.kind == SECURITY && app.account.summary?.holds(t.id) == true -> Text(
                 "בתיק",
                 Modifier.padding(horizontal = 6.dp),
                 style = MaterialTheme.typography.labelLarge,

@@ -1,5 +1,6 @@
 package com.automatelinux.bursa.data
 
+import com.automatelinux.bursa.data.model.AccountSummary
 import com.automatelinux.bursa.data.model.ErrorResponse
 import com.automatelinux.bursa.data.model.ListResponse
 import io.ktor.client.HttpClient
@@ -33,8 +34,9 @@ class ApiException(message: String, val status: Int? = null) : Exception(message
 expect fun createHttpClient(config: HttpClientConfig<*>.() -> Unit): HttpClient
 
 /**
- * The bursa server (see API.md). Market data is open and read-only; the owner's list is the
- * one private thing, and the one thing this app writes — those calls carry the bearer token.
+ * The bursa server (see API.md). Market data is open and read-only; the owner's list and
+ * practice account are private, and the only things this app writes — those calls carry the
+ * bearer token.
  */
 class Api(baseUrl: String, private val token: String, private val cache: KeyValueStore) {
     private val base = baseUrl.trimEnd('/')
@@ -67,12 +69,13 @@ class Api(baseUrl: String, private val token: String, private val cache: KeyValu
         return text
     }
 
-    private suspend fun listCall(body: String?): ListResponse {
+    /** A call to one of the owner's private routes, with the bearer token. */
+    private suspend fun <T> authed(path: String, body: String?, ser: KSerializer<T>): T {
         val resp = try {
             if (body == null) {
-                client.get("$base/api/list") { header(HttpHeaders.Authorization, "Bearer $token") }
+                client.get(base + path) { header(HttpHeaders.Authorization, "Bearer $token") }
             } else {
-                client.post("$base/api/list") {
+                client.post(base + path) {
                     header(HttpHeaders.Authorization, "Bearer $token")
                     contentType(ContentType.Application.Json)
                     setBody(body)
@@ -95,17 +98,23 @@ class Api(baseUrl: String, private val token: String, private val cache: KeyValu
             )
         }
         return try {
-            json.decodeFromString(ListResponse.serializer(), text)
+            json.decodeFromString(ser, text)
         } catch (e: Exception) {
             throw ApiException("תשובה לא צפויה מהשרת")
         }
     }
 
     /** The owner's list, shared with the desktop. */
-    suspend fun list(): ListResponse = listCall(null)
+    suspend fun list(): ListResponse = authed("/api/list", null, ListResponse.serializer())
 
-    /** One change to the list — follow, unfollow, hold, clearHolding, import. Returns the list after it. */
-    suspend fun listOp(op: JsonObject): ListResponse = listCall(op.toString())
+    /** One change to the list — follow, unfollow, import. Returns the list after it. */
+    suspend fun listOp(op: JsonObject): ListResponse = authed("/api/list", op.toString(), ListResponse.serializer())
+
+    /** The practice account, after the server has filled whatever waiting order may now fill. */
+    suspend fun account(): AccountSummary = authed("/api/account", null, AccountSummary.serializer())
+
+    /** One operation — order, cancel, reset. Returns the account after it, with `order` set for an order. */
+    suspend fun accountOp(op: JsonObject): AccountSummary = authed("/api/account", op.toString(), AccountSummary.serializer())
 
     /**
      * A company's logo. Null means the exchange has none (a 404) — which is an answer, and is

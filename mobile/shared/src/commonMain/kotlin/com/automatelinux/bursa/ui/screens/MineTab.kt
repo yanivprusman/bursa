@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -33,7 +34,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import kotlinx.coroutines.launch
+import kotlinx.datetime.Instant
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,9 +50,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.automatelinux.bursa.data.LocalApp
+import com.automatelinux.bursa.data.model.AccountSummary
+import com.automatelinux.bursa.data.model.BUY
 import com.automatelinux.bursa.data.model.INDEX
+import com.automatelinux.bursa.data.model.Order
+import com.automatelinux.bursa.data.model.Position
 import com.automatelinux.bursa.data.model.Quote
 import com.automatelinux.bursa.data.model.SECURITY
+import com.automatelinux.bursa.data.model.Trade
 import com.automatelinux.bursa.data.model.Tracked
 import com.automatelinux.bursa.nav.Screen
 import com.automatelinux.bursa.ui.components.Card
@@ -85,38 +98,44 @@ private const val SUGGEST_BELOW = 4
 fun MineTab() {
     val app = LocalApp.current
     val portfolio = app.portfolio
-    var editing by remember { mutableStateOf<Tracked?>(null) }
-    var removing by remember { mutableStateOf<Tracked?>(null) }
+    val acc = app.account.summary
+    var allActivity by remember { mutableStateOf(false) }
 
-    val holdings = portfolio.holdings
-    val watching = portfolio.watching
+    val holdings = acc?.positions ?: emptyList()
+    val heldIds = holdings.map { it.paper.id }.toSet()
+    val watching = portfolio.items.filter { !(it.kind == SECURITY && it.id in heldIds) }
     // A holding counts toward the total only once its price is known.
-    val valued: List<Pair<Tracked, HoldingValue>> = holdings.mapNotNull { t ->
-        val q = app.quotes[t.key] ?: return@mapNotNull null
-        t to holdingValue(t.qty ?: 0.0, t.avgCost, q.last, q.base)
+    val valued: List<Pair<Position, HoldingValue>> = holdings.mapNotNull { p ->
+        val q = app.quotes[p.paper.key] ?: return@mapNotNull null
+        p to holdingValue(p.qty, p.avgCost, q.last, q.base)
     }
 
-    val ideas = suggestions()
+    val ideas = suggestions(heldIds)
 
     Refreshable(app.quotesRefreshing, onRefresh = { app.refreshHome(byUser = true) }) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 14.dp, bottom = 28.dp)) {
-            app.quotesError?.let { item { StaleNote(it, onRetry = { app.refreshQuotes() }) } }
+            (app.account.error ?: app.quotesError)?.let { item { StaleNote(it, onRetry = { app.refreshHome() }) } }
 
-            if (portfolio.items.isEmpty()) item { Welcome() }
+            if (acc != null) {
+                item { AccountCard(acc, portfolioTotals(valued.map { it.second }), valued, unpriced = holdings.size - valued.size) }
+                if (holdings.isEmpty() && acc.pending.isEmpty()) item { FirstSteps(acc) }
+            } else if (app.account.error == null) {
+                item { Welcome() }
+            }
 
             if (holdings.isNotEmpty()) {
-                item { TotalsCard(portfolioTotals(valued.map { it.second }), valued, unpriced = holdings.size - valued.size) }
                 item { SectionTitle("התיק שלי") }
-                items(holdings, key = { "h" + it.key }) { t ->
-                    HoldingRow(
-                        t,
-                        app.quotes[t.key],
-                        missing = app.quotesMissing[t.key],
-                        onClick = { app.nav.push(t.screen()) },
-                        onEdit = { editing = t },
-                        // A holding is something the user typed in; it is never dropped on one tap.
-                        onRemove = { removing = t },
-                    )
+                items(holdings, key = { "h" + it.paper.id }) { p ->
+                    HoldingRow(p, app.quotes[p.paper.key], missing = app.quotesMissing[p.paper.key], onClick = { app.nav.push(p.paper.tracked().screen()) })
+                }
+            }
+
+            if (acc != null && acc.pending.isNotEmpty()) {
+                item { SectionTitle("פקודות ממתינות", note = "בשער הפתיחה הבא") }
+                item {
+                    Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = PaddingValues(vertical = 6.dp)) {
+                        Column { acc.pending.forEach { o -> OrderRow(o, cancellable = true) } }
+                    }
                 }
             }
 
@@ -128,25 +147,12 @@ fun MineTab() {
                         app.quotes[t.key],
                         missing = app.quotesMissing[t.key],
                         onClick = { app.nav.push(t.screen()) },
-                        onHold = if (t.kind == INDEX) null else ({ editing = t }),
                         onRemove = { portfolio.unfollow(t.kind, t.id) },
                     )
                 }
             }
 
-            // Only worth saying when something on the list can actually be held (an index cannot).
-            if (holdings.isEmpty() && watching.any { it.kind != INDEX }) {
-                item {
-                    Text(
-                        "מחזיקים באחד מהם? לחיצה ארוכה על השורה ← \"הוספת החזקה\", ושווי התיק יופיע כאן למעלה.",
-                        Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            if (portfolio.items.size < SUGGEST_BELOW) {
+            if (portfolio.items.size + holdings.size < SUGGEST_BELOW) {
                 if (ideas.isNotEmpty()) {
                     item { SectionTitle(if (portfolio.items.isEmpty()) "התחילו מכאן" else "אולי גם אלה", note = "המדדים המובילים והמניות הנסחרות ביותר היום") }
                     item {
@@ -156,13 +162,43 @@ fun MineTab() {
                     }
                 }
             }
+
+            if (acc != null) {
+                val lines = activity(acc)
+                if (lines.isNotEmpty()) {
+                    item { SectionTitle("פעולות אחרונות", action = if (lines.size > 6) (if (allActivity) "פחות" else "הכול") else null, onAction = { allActivity = !allActivity }) }
+                    item {
+                        Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = PaddingValues(vertical = 6.dp)) {
+                            Column {
+                                (if (allActivity) lines else lines.take(6)).forEach { l ->
+                                    if (l.trade != null) TradeRow(l.trade, showName = true) else OrderRow(l.order!!, cancellable = false)
+                                }
+                            }
+                        }
+                    }
+                    item { StartOver(acc) }
+                }
+            }
         }
     }
+}
 
-    editing?.let { t -> HoldingSheet(t, app.quotes[t.key]?.last, onDone = { editing = null }) }
-    removing?.let { t ->
-        ConfirmRemoveHolding(t, onConfirm = { portfolio.unfollow(t.kind, t.id); removing = null }, onDismiss = { removing = null })
-    }
+private class ActivityLine(val at: String, val trade: Trade? = null, val order: Order? = null)
+
+/** The broker's statement: trades and the orders that did not fill, newest first. */
+private fun activity(a: AccountSummary): List<ActivityLine> =
+    (a.trades.map { ActivityLine(it.at, trade = it) } + a.orders.filter { it.status != "filled" }.map { ActivityLine(it.closedAt ?: it.placedAt, order = it) })
+        .sortedByDescending { it.at }
+
+/** What an empty practice account says: what it is, and the one thing to do. */
+@Composable
+private fun FirstSteps(a: AccountSummary) {
+    Text(
+        "יש לכם \u2066${Fmt.shekels(a.cash / 100)}\u2069 מדומים לתרגול. פתחו נייר — מניה, קרן סל או אג\"ח — ולחצו \"קנייה\". הפקודה מתבצעת בשער האמיתי של הבורסה.",
+        Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /** What a first-time user sees above the suggestions: what this tab will become. */
@@ -174,7 +210,7 @@ private fun Welcome() {
             Text("הרשימה שלך", style = MaterialTheme.typography.titleLarge, color = c.onHero)
             Spacer(Modifier.height(6.dp))
             Text(
-                "הוסיפו ניירות למעקב מהרשימה שלמטה או מהחיפוש. הזינו כמה אתם מחזיקים — וכאן יופיעו שווי התיק והשינוי היומי בשקלים.",
+                "חשבון התרגול נטען מהשרת. בינתיים אפשר להוסיף ניירות למעקב מהרשימה שלמטה או מהחיפוש.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = c.onHeroMuted,
             )
@@ -186,7 +222,7 @@ private class Suggestion(val item: Tracked, val last: Double, val changePct: Dou
 
 /** The headline indices, then today's most traded shares — minus whatever is already followed. */
 @Composable
-private fun suggestions(): List<Suggestion> {
+private fun suggestions(heldIds: Set<String>): List<Suggestion> {
     val app = LocalApp.current
     val market = app.overview.data ?: return emptyList()
     val indices = market.indices.take(3).map {
@@ -195,7 +231,7 @@ private fun suggestions(): List<Suggestion> {
     val shares = market.movers.active.take(5).map {
         Suggestion(Tracked(SECURITY, it.id, it.name, type = "מניות", companyId = it.companyId), it.last, it.changePct, "agorot")
     }
-    return (indices + shares).filter { !app.portfolio.isTracked(it.item.kind, it.item.id) }.take(6)
+    return (indices + shares).filter { !app.portfolio.isTracked(it.item.kind, it.item.id) && !(it.item.kind == SECURITY && it.item.id in heldIds) }.take(6)
 }
 
 @Composable
@@ -245,80 +281,83 @@ fun FollowButton(followed: Boolean, tag: String, onClick: () -> Unit) {
     }
 }
 
-/** The number the user opened the app for: what it is all worth, and what today did to it. */
+/** The number the user opened the app for: what the practice account is worth, and what the market did to it. */
 @Composable
-private fun TotalsCard(t: PortfolioTotals, valued: List<Pair<Tracked, HoldingValue>>, unpriced: Int) {
+private fun AccountCard(a: AccountSummary, t: PortfolioTotals, valued: List<Pair<Position, HoldingValue>>, unpriced: Int) {
     val c = Bursa.colors
     fun tone(v: Double) = if (v > 0) HeroUp else if (v < 0) HeroDown else c.onHeroMuted
-    HeroCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp).testTag("portfolio-total")) {
+    val cash = a.cash / 100
+    val worth = cash + t.value
+    val start = a.startCash / 100
+    val sinceStart = worth - start
+    @Composable
+    fun line(label: String, content: @Composable () -> Unit) {
+        Row(Modifier.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, Modifier.width(96.dp), style = MaterialTheme.typography.bodyMedium, color = c.onHeroMuted)
+            content()
+        }
+    }
+    HeroCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp).testTag("account-total")) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 20.dp)) {
-            Text("שווי התיק", style = MaterialTheme.typography.labelLarge, color = c.onHeroMuted)
-            Spacer(Modifier.height(4.dp))
-            Num(Fmt.shekels(t.value), style = NumHero, color = c.onHero, flashOn = t.value)
-            Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("היום", Modifier.width(86.dp), style = MaterialTheme.typography.bodyMedium, color = c.onHeroMuted)
-                Num(Fmt.signedShekels(t.dayChange), style = NumMedium, color = tone(t.dayChange))
-                if (t.dayChangePct != null) {
-                    Spacer(Modifier.width(8.dp))
-                    Num("(" + Fmt.pct(t.dayChangePct) + ")", style = NumBody, color = tone(t.dayChange))
-                }
+                Text("שווי החשבון", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = c.onHeroMuted)
+                PracticeTag()
             }
-            if (t.gain != null) {
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        if (t.gainIsPartial) "מאז הקנייה*" else "מאז הקנייה",
-                        Modifier.width(86.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = c.onHeroMuted,
-                    )
-                    Num(Fmt.signedShekels(t.gain), style = NumMedium, color = tone(t.gain))
-                    if (t.gainPct != null) {
+            Spacer(Modifier.height(4.dp))
+            Num(Fmt.shekels(worth), style = NumHero, color = c.onHero, flashOn = worth)
+            Spacer(Modifier.height(10.dp))
+            line("מאז ההתחלה") {
+                Num(Fmt.signedShekels(sinceStart), style = NumMedium, color = tone(sinceStart))
+                Spacer(Modifier.width(8.dp))
+                Num("(" + Fmt.pct(sinceStart / start * 100) + ")", style = NumBody, color = tone(sinceStart))
+            }
+            if (valued.isNotEmpty()) {
+                line("היום") {
+                    Num(Fmt.signedShekels(t.dayChange), style = NumMedium, color = tone(t.dayChange))
+                    if (t.dayChangePct != null) {
                         Spacer(Modifier.width(8.dp))
-                        Num("(" + Fmt.pct(t.gainPct) + ")", style = NumBody, color = tone(t.gain))
+                        Num("(" + Fmt.pct(t.dayChangePct) + ")", style = NumBody, color = tone(t.dayChange))
                     }
                 }
             }
+            line("מזומן פנוי") { Num(Fmt.shekels(a.available / 100), style = NumMedium, color = c.onHero) }
+            if (a.available != a.cash) {
+                Text(
+                    "ועוד \u2066${Fmt.shekels((a.cash - a.available) / 100)}\u2069 שמורים לפקודות ממתינות",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.onHeroMuted,
+                )
+            }
 
-            // What the portfolio is made of — worth showing once there is more than one thing in it.
-            if (valued.size > 1 && t.value > 0) {
+            // What the account is made of — cash is a slice too.
+            if (valued.isNotEmpty() && worth > 0) {
                 val slices = valued.sortedByDescending { it.second.value }
-                Spacer(Modifier.height(18.dp))
+                val named = slices.take(SLICES.size - 2)
+                val rest = slices.drop(SLICES.size - 2)
+                Spacer(Modifier.height(16.dp))
                 Row(Modifier.fillMaxWidth().height(8.dp).clip(CircleShape), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     slices.forEachIndexed { i, (_, v) ->
-                        if (v.value > 0) {
-                            Box(Modifier.weight(v.value.toFloat()).fillMaxHeight().background(SLICES[minOf(i, SLICES.lastIndex)]))
-                        }
+                        if (v.value > 0) Box(Modifier.weight(v.value.toFloat()).fillMaxHeight().background(SLICES[minOf(i, SLICES.size - 2)]))
                     }
+                    if (cash > 0) Box(Modifier.weight(cash.toFloat()).fillMaxHeight().background(SLICES.last()))
                 }
                 Spacer(Modifier.height(10.dp))
-                slices.take(SLICES.size - 1).forEachIndexed { i, (item, v) ->
+                @Composable
+                fun slice(color: Color, name: String, value: Double) {
                     Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).clip(CircleShape).background(SLICES[i]))
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(color))
                         Spacer(Modifier.width(8.dp))
-                        Text(item.name, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = c.onHero, maxLines = 1)
-                        Num(Fmt.fixed(v.value / t.value * 100, 1) + "%", style = NumSmall, color = c.onHeroMuted)
+                        Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = c.onHero, maxLines = 1)
+                        Num(Fmt.fixed(value / worth * 100, 1) + "%", style = NumSmall, color = c.onHeroMuted)
                     }
                 }
-                if (slices.size > SLICES.size - 1) {
-                    val rest = slices.drop(SLICES.size - 1)
-                    Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).clip(CircleShape).background(SLICES.last()))
-                        Spacer(Modifier.width(8.dp))
-                        Text("עוד ${rest.size}", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = c.onHero)
-                        Num(Fmt.fixed(rest.sumOf { it.second.value } / t.value * 100, 1) + "%", style = NumSmall, color = c.onHeroMuted)
-                    }
-                }
+                named.forEachIndexed { i, (p, v) -> slice(SLICES[i], p.paper.name, v.value) }
+                if (rest.isNotEmpty()) slice(SLICES[SLICES.size - 2], "עוד ${rest.size}", rest.sumOf { it.second.value })
+                slice(SLICES.last(), "מזומן", cash)
             }
-
-            val notes = buildList {
-                if (t.gainIsPartial) add("* רק החזקות שהוזן להן מחיר קנייה")
-                if (unpriced > 0) add("$unpriced החזקות בלי מחיר עדכני אינן בסכום")
-            }
-            if (notes.isNotEmpty()) {
+            if (unpriced > 0) {
                 Spacer(Modifier.height(10.dp))
-                Text(notes.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = c.onHeroMuted)
+                Text("$unpriced החזקות בלי מחיר עדכני אינן בסכום", style = MaterialTheme.typography.bodySmall, color = c.onHeroMuted)
             }
         }
     }
@@ -332,7 +371,7 @@ private fun RowShell(t: Tracked, tag: String, onClick: () -> Unit, menu: List<Pa
         Row(
             Modifier
                 .fillMaxWidth()
-                .combinedClickable(onClick = onClick, onLongClick = { open = true })
+                .combinedClickable(onClick = onClick, onLongClick = if (menu.isEmpty()) null else ({ open = true }))
                 .testTag(tag)
                 .padding(horizontal = 16.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -350,25 +389,24 @@ private fun RowShell(t: Tracked, tag: String, onClick: () -> Unit, menu: List<Pa
 }
 
 @Composable
-private fun HoldingRow(t: Tracked, q: Quote?, missing: String?, onClick: () -> Unit, onEdit: () -> Unit, onRemove: () -> Unit) {
+private fun HoldingRow(p: Position, q: Quote?, missing: String?, onClick: () -> Unit) {
     val c = Bursa.colors
-    val qty = t.qty ?: 0.0
-    RowShell(t, "holding-${t.id}", onClick, listOf("עריכת ההחזקה" to onEdit, "הסרה מהרשימה" to onRemove)) {
+    RowShell(p.paper.tracked(), "holding-${p.paper.id}", onClick, emptyList()) {
+        val v = q?.let { holdingValue(p.qty, p.avgCost, it.last, it.base) }
         Column(Modifier.weight(1f)) {
-            NameBlock(t.name, null)
+            NameBlock(p.paper.name, null)
             Spacer(Modifier.height(2.dp))
             if (q != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Num(Fmt.quantity(qty) + " × " + Fmt.trimmed(q.last), style = NumSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Num(Fmt.quantity(p.qty) + " × " + Fmt.trimmed(q.last), style = NumSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.width(8.dp))
-                    Num(q.changePct?.let { Fmt.pct(it) } ?: "", style = NumSmall, color = c.of(q.changePct))
+                    Num(v?.gainPct?.let { Fmt.pct(it) } ?: "", style = NumSmall, color = c.of(v?.gain))
                 }
             } else {
                 Text(missing ?: "ממתין למחיר…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        if (q != null) {
-            val v = holdingValue(qty, t.avgCost, q.last, q.base)
+        if (v != null) {
             Column(horizontalAlignment = Alignment.End) {
                 Num(Fmt.shekels(v.value), style = NumMedium, flashOn = v.value)
                 if (v.dayChange != null) Num(Fmt.signedShekels(v.dayChange), style = NumSmall, color = c.of(v.dayChange))
@@ -377,12 +415,113 @@ private fun HoldingRow(t: Tracked, q: Quote?, missing: String?, onClick: () -> U
     }
 }
 
+/** "קנייה" / "מכירה" on a small tinted pill — gold to buy, blue to sell; never the up/down colours. */
 @Composable
-private fun WatchRow(t: Tracked, q: Quote?, missing: String?, onClick: () -> Unit, onHold: (() -> Unit)?, onRemove: () -> Unit) {
-    val menu = buildList {
-        if (onHold != null) add("הוספת החזקה" to onHold)
-        add("הסרה מהמעקב" to onRemove)
+fun SidePill(side: String) {
+    val color = if (side == BUY) Bursa.colors.accent else SellBlue
+    Text(
+        if (side == BUY) "קנייה" else "מכירה",
+        Modifier.clip(RoundedCornerShape(6.dp)).background(color.copy(alpha = 0.15f)).padding(horizontal = 6.dp, vertical = 1.dp),
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+        color = color,
+    )
+}
+
+/** A waiting (or cancelled / rejected) order; [cancellable] for a waiting one the owner may cancel. */
+@Composable
+fun OrderRow(o: Order, cancellable: Boolean) {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
+    Row(
+        Modifier.fillMaxWidth().clickable { app.nav.push(o.paper.tracked().screen()) }.padding(horizontal = 16.dp, vertical = 8.dp).testTag("order-${o.id}"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LogoTile(SECURITY, o.paper.companyId, size = 32.dp)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SidePill(o.side)
+                Spacer(Modifier.width(6.dp))
+                Text(o.paper.name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), maxLines = 1)
+            }
+            Text(
+                when (o.status) {
+                    "pending" -> "\u2066${Fmt.fixed(o.qty, 0)}\u2069 · בפתיחה, מ-\u2066${Fmt.dayMonth(o.fillFrom)}\u2069"
+                    "cancelled" -> "\u2066${Fmt.fixed(o.qty, 0)}\u2069 · בוטלה · \u2066${stamp(o.closedAt ?: o.placedAt)}\u2069"
+                    else -> "נדחתה — ${o.reason ?: ""} · \u2066${stamp(o.closedAt ?: o.placedAt)}\u2069"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+            )
+        }
+        if (cancellable) {
+            TextButton(
+                onClick = { scope.launch { runCatching { app.account.cancel(o.id) } } },
+                modifier = Modifier.testTag("cancel-order-${o.id}"),
+            ) { Text("ביטול", color = MaterialTheme.colorScheme.error) }
+        }
     }
+}
+
+@Composable
+fun TradeRow(t: Trade, showName: Boolean) {
+    val app = LocalApp.current
+    val paid = if (t.side == BUY) t.gross + t.fee else t.gross - t.fee
+    Row(
+        Modifier.fillMaxWidth().clickable { app.nav.push(t.paper.tracked().screen()) }.padding(horizontal = 16.dp, vertical = 8.dp).testTag("trade-${t.id}"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SidePill(t.side)
+                if (showName) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(t.paper.name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), maxLines = 1)
+                }
+            }
+            Text(
+                "\u2066${Fmt.fixed(t.qty, 0)} × ${Fmt.trimmed(t.price)}\u2069" + (if (t.how == "open") " · שער פתיחה" else "") + " · \u2066${stamp(t.at)}\u2069",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Num((if (t.side == BUY) "-" else "+") + Fmt.shekels(paid / 100), style = NumSmall, color = if (t.side == BUY) MaterialTheme.colorScheme.onSurface else Bursa.colors.up)
+    }
+}
+
+/** "2.10 14:27" in Israel time. */
+private fun stamp(iso: String): String = runCatching {
+    val d = Instant.parse(iso).toLocalDateTime(TimeZone.of("Asia/Jerusalem"))
+    "${d.dayOfMonth}.${d.monthNumber} ${d.hour.toString().padStart(2, '0')}:${d.minute.toString().padStart(2, '0')}"
+}.getOrDefault("")
+
+/** Back to the starting cash. The old account is kept on the server, but it is still a big step — so it asks. */
+@Composable
+private fun StartOver(a: AccountSummary) {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
+    var asking by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp)) {
+        if (asking) {
+            Text("למחוק את כל העסקאות ולהתחיל שוב מ-\u2066${Fmt.shekels(a.startCash / 100)}\u2069?", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(8.dp))
+            Row {
+                OutlinedButton(onClick = { scope.launch { runCatching { app.account.reset() }; asking = false } }, modifier = Modifier.testTag("start-over-confirm")) {
+                    Text("כן, מההתחלה", color = MaterialTheme.colorScheme.error)
+                }
+                Spacer(Modifier.width(8.dp))
+                TextButton(onClick = { asking = false }, modifier = Modifier.testTag("start-over-cancel")) { Text("לא") }
+            }
+        } else {
+            TextButton(onClick = { asking = true }, modifier = Modifier.testTag("start-over")) { Text("התחלה מחדש של חשבון התרגול", color = Bursa.colors.accent) }
+        }
+    }
+}
+
+@Composable
+private fun WatchRow(t: Tracked, q: Quote?, missing: String?, onClick: () -> Unit, onRemove: () -> Unit) {
+    val menu = listOf("הסרה מהמעקב" to onRemove)
     RowShell(t, "watch-${t.id}", onClick, menu) {
         NameBlock(t.name, if (q == null) (missing ?: "ממתין למחיר…") else t.type, Modifier.weight(1f))
         if (q != null) {
@@ -394,39 +533,33 @@ private fun WatchRow(t: Tracked, q: Quote?, missing: String?, onClick: () -> Uni
     }
 }
 
-/** The card other screens reuse to show a holding in place (the security page). */
+/** The holding in place on the security page: worth, today, since buying, cost. */
 @Composable
-fun HoldingCard(t: Tracked, q: Quote, onEdit: () -> Unit, modifier: Modifier = Modifier) {
+fun PositionCard(p: Position, q: Quote, modifier: Modifier = Modifier) {
     val c = Bursa.colors
-    val v = holdingValue(t.qty ?: 0.0, t.avgCost, q.last, q.base)
-    Card(modifier.fillMaxWidth().testTag("holding-card"), onClick = onEdit) {
+    val v = holdingValue(p.qty, p.avgCost, q.last, q.base)
+    @Composable
+    fun line(label: String, value: String, color: Color = MaterialTheme.colorScheme.onSurface) {
+        Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, Modifier.width(120.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Num(value, style = NumBody, color = color)
+        }
+    }
+    Card(modifier.fillMaxWidth().testTag("position-card")) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("ההחזקה שלי", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                Text("עריכה", style = MaterialTheme.typography.labelLarge, color = c.accent)
+                PracticeTag()
             }
             Spacer(Modifier.height(8.dp))
             Num(Fmt.shekels(v.value), style = NumLarge, flashOn = v.value)
             Spacer(Modifier.height(2.dp))
-            Num(Fmt.quantity(t.qty ?: 0.0) + " × " + Fmt.trimmed(q.last), style = NumSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Num(Fmt.quantity(p.qty) + " × " + Fmt.trimmed(q.last), style = NumSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(10.dp))
-            if (v.dayChange != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("היום", Modifier.width(92.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Num(Fmt.signedShekels(v.dayChange), style = NumBody, color = c.of(v.dayChange))
-                }
-            }
-            if (v.gain != null) {
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("מאז הקנייה", Modifier.width(92.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Num(
-                        Fmt.signedShekels(v.gain) + (v.gainPct?.let { "  (" + Fmt.pct(it) + ")" } ?: ""),
-                        style = NumBody,
-                        color = c.of(v.gain),
-                    )
-                }
-            }
+            if (v.dayChange != null) line("היום", Fmt.signedShekels(v.dayChange), c.of(v.dayChange))
+            if (v.gain != null) line("מאז הקנייה", Fmt.signedShekels(v.gain) + (v.gainPct?.let { "  (" + Fmt.pct(it) + ")" } ?: ""), c.of(v.gain))
+            line("שער קנייה ממוצע", Fmt.trimmed(p.avgCost) + " אג'")
+            line("עלות כולל עמלות", Fmt.shekels(p.cost / 100))
         }
     }
 }

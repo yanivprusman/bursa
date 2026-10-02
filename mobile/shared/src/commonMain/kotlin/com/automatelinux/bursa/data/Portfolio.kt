@@ -4,7 +4,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.automatelinux.bursa.data.model.INDEX
 import com.automatelinux.bursa.data.model.Saved
 import com.automatelinux.bursa.data.model.Tracked
 import com.automatelinux.bursa.data.model.refKey
@@ -13,16 +12,15 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /**
- * What the owner follows and holds. The list lives on the owner's own server and is shared
+ * What the owner follows. (What is held comes only from trades — [TradingAccount].) The list lives on the owner's own server and is shared
  * with the desktop version; this phone keeps a copy so the app opens with it at once and
  * still shows it with no connection.
  *
- * Every change is sent as one operation ("follow this", "hold 50 of that") and the server's
+ * Every change is sent as one operation ("follow this", "unfollow that") and the server's
  * answer becomes the list — so the phone and the desktop can both be open and neither
  * overwrites what the other just did. A change is shown immediately; if the server cannot
  * be reached it is taken back and [syncError] says so. Nothing is ever silently dropped.
@@ -62,11 +60,6 @@ class Portfolio(private val store: KeyValueStore, private val api: Api, private 
     fun find(kind: String, id: String): Tracked? = items.firstOrNull { it.kind == kind && it.id == id }
     fun isTracked(kind: String, id: String): Boolean = find(kind, id) != null
 
-    val holdings: List<Tracked> get() = items.filter { it.held }
-    val watching: List<Tracked> get() = items.filter { !it.held }
-
-    /** Comma-joined keys for /api/quotes, or null when nothing is followed. */
-    fun quoteIds(): String? = items.takeIf { it.isNotEmpty() }?.joinToString(",") { it.key }
 
     /**
      * Bring the list in line with the server. The first time, a list this phone built before
@@ -115,12 +108,12 @@ class Portfolio(private val store: KeyValueStore, private val api: Api, private 
         }
     }
 
-    private fun itemJson(t: Tracked) = json.encodeToJsonElement(Tracked.serializer(), t.copy(qty = null, avgCost = null))
+    private fun itemJson(t: Tracked) = json.encodeToJsonElement(Tracked.serializer(), t)
 
     fun follow(t: Tracked, onDone: () -> Unit = {}) {
         if (isTracked(t.kind, t.id)) return
         change(buildJsonObject { put("op", "follow"); put("item", itemJson(t)) }, onDone) {
-            items.add(t.copy(qty = null, avgCost = null))
+            items.add(t)
         }
     }
 
@@ -128,30 +121,6 @@ class Portfolio(private val store: KeyValueStore, private val api: Api, private 
         if (!isTracked(kind, id)) return
         change(buildJsonObject { put("op", "unfollow"); put("kind", kind); put("id", id) }, {}) {
             items.removeAll { it.kind == kind && it.id == id }
-        }
-    }
-
-    /** Record a holding; following is implied. An index cannot be held. */
-    fun setHolding(t: Tracked, qty: Double, avgCost: Double?, onDone: () -> Unit = {}) {
-        require(t.kind != INDEX) { "an index cannot be held" }
-        val op = buildJsonObject {
-            put("op", "hold")
-            put("item", itemJson(t))
-            put("qty", qty)
-            put("avgCost", avgCost?.let { JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull)
-        }
-        change(op, onDone) {
-            val i = items.indexOfFirst { it.kind == t.kind && it.id == t.id }
-            if (i >= 0) items[i] = items[i].copy(qty = qty, avgCost = avgCost) else items.add(t.copy(qty = qty, avgCost = avgCost))
-        }
-    }
-
-    /** Drop the holding but keep following the paper. */
-    fun clearHolding(kind: String, id: String) {
-        val i = items.indexOfFirst { it.kind == kind && it.id == id }
-        if (i < 0) return
-        change(buildJsonObject { put("op", "clearHolding"); put("kind", kind); put("id", id) }, {}) {
-            items[i] = items[i].copy(qty = null, avgCost = null)
         }
     }
 
@@ -169,7 +138,7 @@ class Portfolio(private val store: KeyValueStore, private val api: Api, private 
 
     fun opened(t: Tracked) {
         recent.removeAll { refKey(it.kind, it.id) == t.key }
-        recent.add(0, t.copy(qty = null, avgCost = null))
+        recent.add(0, t)
         while (recent.size > MAX_RECENT) recent.removeAt(recent.lastIndex)
         saveLocal()
     }

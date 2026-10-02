@@ -33,7 +33,8 @@ class AppContext(
     private val scope: CoroutineScope,
 ) {
     val portfolio = Portfolio(store, api, scope)
-    val nav = Navigator(if (portfolio.items.isEmpty()) Tab.Market else Tab.Mine)
+    val account = TradingAccount(store, api, scope)
+    val nav = Navigator(if (portfolio.items.isEmpty() && account.summary?.positions.isNullOrEmpty()) Tab.Market else Tab.Mine)
 
     /** True between onStart and onStop — nothing polls while the app is in the background. */
     var active by mutableStateOf(false)
@@ -85,16 +86,26 @@ class AppContext(
     /** Take a quote that arrived on some other screen (a detail page) as the newest. */
     fun learn(q: Quote) {
         quotes[refKey(q.kind, q.id)] = q
-        if (portfolio.isTracked(q.kind, q.id)) persistQuotes()
+        if (refKey(q.kind, q.id) in mineKeys()) persistQuotes()
+    }
+
+    /** Everything the Mine tab prices: what is followed, held, or waiting to be bought or sold. */
+    private fun mineKeys(): Set<String> {
+        val a = account.summary
+        return buildSet {
+            portfolio.items.forEach { add(it.key) }
+            a?.positions?.forEach { add(it.paper.key) }
+            a?.pending?.forEach { add(it.paper.key) }
+        }
     }
 
     private fun persistQuotes() {
-        val kept = portfolio.items.mapNotNull { quotes[it.key] }
+        val kept = mineKeys().mapNotNull { quotes[it] }
         store.put(QUOTES_KEY, api.json.encodeToString(ListSerializer(Quote.serializer()), kept))
     }
 
     fun refreshQuotes(byUser: Boolean = false) {
-        val ids = portfolio.quoteIds()
+        val ids = mineKeys().takeIf { it.isNotEmpty() }?.joinToString(",")
         if (ids == null) {
             quotesError = null
             return
@@ -127,8 +138,9 @@ class AppContext(
     fun refreshHome(byUser: Boolean = false) {
         overview.refresh(byUser)
         refreshQuotes(byUser)
-        // The desktop can change the list too; if it did, price what is new.
+        // The desktop can change the list and trade too; if it did, price what is new.
         portfolio.sync(onChanged = { refreshQuotes() })
+        account.refresh(onChanged = { refreshQuotes() })
     }
 
     private companion object {
