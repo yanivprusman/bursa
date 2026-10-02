@@ -15,6 +15,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import com.automatelinux.bursa.data.KeyValueStore
 import com.automatelinux.bursa.data.Platform
 import java.io.File
@@ -37,9 +40,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** IBM Plex Sans Hebrew (OFL, see app/licenses): Hebrew, Latin and even-width digits in one family. */
+    private val plex = FontFamily(
+        Font(R.font.plex_regular, FontWeight.Normal),
+        Font(R.font.plex_medium, FontWeight.Medium),
+        Font(R.font.plex_semibold, FontWeight.SemiBold),
+        Font(R.font.plex_bold, FontWeight.Bold),
+    )
+
     /**
-     * One small file per key in app-private storage: the user's list and holdings, and the
-     * last good server responses. Written to a temp file and renamed, so a crash mid-write
+     * One small file per key in app-private storage: the user's list and holdings, the last
+     * good server responses, and the logos. Written to a temp file and renamed, so a crash mid-write
      * never leaves a half-written list.
      */
     private val store by lazy {
@@ -52,10 +63,14 @@ class MainActivity : ComponentActivity() {
 
             override fun get(key: String): String? = file(key).takeIf { it.exists() }?.readText()
 
-            override fun put(key: String, value: String) {
+            override fun put(key: String, value: String) = putBytes(key, value.toByteArray())
+
+            override fun getBytes(key: String): ByteArray? = file(key).takeIf { it.exists() }?.readBytes()
+
+            override fun putBytes(key: String, value: ByteArray) {
                 val f = file(key)
                 val tmp = File(dir, f.name + ".tmp")
-                tmp.writeText(value)
+                tmp.writeBytes(value)
                 if (!tmp.renameTo(f)) throw IllegalStateException("could not save ${f.name}")
             }
         }
@@ -76,6 +91,7 @@ class MainActivity : ComponentActivity() {
                 baseUrl = BuildConfig.API_BASE_URL,
                 store = store,
                 platform = platform,
+                font = plex,
                 active = active,
                 backHandler = { enabled, onBack -> BackHandler(enabled, onBack) },
             )

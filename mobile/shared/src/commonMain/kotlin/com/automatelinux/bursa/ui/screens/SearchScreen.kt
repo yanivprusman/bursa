@@ -4,6 +4,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -15,8 +17,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -46,13 +46,14 @@ import com.automatelinux.bursa.data.model.SearchResponse
 import com.automatelinux.bursa.data.model.Tracked
 import com.automatelinux.bursa.ui.components.BackButton
 import com.automatelinux.bursa.ui.components.FailedBlock
+import com.automatelinux.bursa.ui.components.LogoTile
 import com.automatelinux.bursa.ui.components.NameBlock
 import com.automatelinux.bursa.ui.components.SectionTitle
 import com.automatelinux.bursa.ui.theme.Bursa
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
-private fun Hit.tracked() = Tracked(kind, id, name, symbol, type)
+private fun Hit.tracked() = Tracked(kind, id, name, symbol, type, companyId = companyId)
 
 @Composable
 fun SearchScreen() {
@@ -155,7 +156,7 @@ private fun Hint(text: String) {
     )
 }
 
-/** Tap the row to open the paper; tap the star to follow it without leaving the results. */
+/** Tap the row to open the paper; tap the + to follow it without leaving the results. */
 @Composable
 private fun ResultRow(t: Tracked) {
     val app = LocalApp.current
@@ -166,27 +167,29 @@ private fun ResultRow(t: Tracked) {
             .fillMaxWidth()
             .clickable { app.nav.push(t.screen()) }
             .testTag("result-${t.key}")
-            .padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+            .padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        LogoTile(t.kind, t.companyId)
+        Spacer(Modifier.width(12.dp))
         NameBlock(
             t.name,
-            listOfNotNull(t.type, t.symbol?.takeIf { it != t.name }, "⁦${t.id}⁩").joinToString(" · "),
+            listOfNotNull(t.type, t.symbol?.takeIf { it != t.name }, "\u2066${t.id}\u2069").joinToString(" · "),
             Modifier.weight(1f),
         )
+        Spacer(Modifier.width(8.dp))
         when {
             // Un-following a held paper would delete the holding; that is done on its own page.
             existing?.held == true -> Text(
                 "בתיק",
-                Modifier.padding(horizontal = 12.dp),
+                Modifier.padding(horizontal = 6.dp),
                 style = MaterialTheme.typography.labelLarge,
                 color = Bursa.colors.accent,
             )
-            existing != null -> IconButton(onClick = { portfolio.unfollow(t.kind, t.id) }, modifier = Modifier.testTag("unfollow-${t.key}")) {
-                Icon(Icons.Filled.Star, "הסרה מהמעקב", tint = Bursa.colors.accent)
-            }
-            else -> IconButton(onClick = { portfolio.follow(t); app.refreshQuotes() }, modifier = Modifier.testTag("follow-${t.key}")) {
-                Icon(Icons.Outlined.StarBorder, "הוספה למעקב")
+            existing != null -> FollowButton(followed = true, tag = "unfollow-${t.key}") { portfolio.unfollow(t.kind, t.id) }
+            else -> FollowButton(followed = false, tag = "follow-${t.key}") {
+                portfolio.follow(t)
+                app.refreshQuotes()
             }
         }
     }

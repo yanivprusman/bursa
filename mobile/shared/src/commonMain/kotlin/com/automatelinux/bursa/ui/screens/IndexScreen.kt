@@ -1,7 +1,6 @@
 package com.automatelinux.bursa.ui.screens
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -27,10 +25,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.automatelinux.bursa.data.LocalApp
 import com.automatelinux.bursa.data.model.Component
 import com.automatelinux.bursa.data.model.INDEX
+import com.automatelinux.bursa.data.model.SECURITY
 import com.automatelinux.bursa.data.model.IndexDetail
 import com.automatelinux.bursa.data.model.Tracked
 import com.automatelinux.bursa.data.rememberResource
@@ -40,7 +40,8 @@ import com.automatelinux.bursa.ui.components.ChangeChip
 import com.automatelinux.bursa.ui.components.Fact
 import com.automatelinux.bursa.ui.components.FactGrid
 import com.automatelinux.bursa.ui.components.FailedBlock
-import com.automatelinux.bursa.ui.components.LoadingBlock
+import com.automatelinux.bursa.ui.components.PaperRow
+import com.automatelinux.bursa.ui.components.Segmented
 import com.automatelinux.bursa.ui.components.NameBlock
 import com.automatelinux.bursa.ui.components.Num
 import com.automatelinux.bursa.ui.components.Refreshable
@@ -68,7 +69,7 @@ fun IndexScreen(id: String, name: String) {
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            DetailBar(name, followed) {
+            DetailBar(name, INDEX, null, followed) {
                 if (followed) portfolio.unfollow(INDEX, id) else { portfolio.follow(self); app.refreshQuotes() }
             }
         },
@@ -78,7 +79,7 @@ fun IndexScreen(id: String, name: String) {
                 if (d == null) {
                     item {
                         val error = res.error
-                        if (error != null) FailedBlock(error, onRetry = { res.refresh() }) else LoadingBlock()
+                        if (error != null) FailedBlock(error, onRetry = { res.refresh() }) else DetailSkeleton()
                     }
                     return@LazyColumn
                 }
@@ -113,11 +114,8 @@ fun IndexScreen(id: String, name: String) {
                     }
                     item {
                         SectionTitle("${d.components.size} ניירות במדד")
-                        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf("לפי משקל", "העולות", "היורדות").forEachIndexed { i, label ->
-                                FilterChip(selected = order == i, onClick = { order = i }, label = { Text(label) }, modifier = Modifier.testTag("order-$i"))
-                            }
-                        }
+                        Segmented(listOf("לפי משקל", "העולות", "היורדות"), order, { order = it }, Modifier.padding(horizontal = 16.dp), tag = "order")
+                        Spacer(Modifier.height(6.dp))
                     }
                     items(sorted, key = { it.id }) { c ->
                         ComponentRow(c) { app.nav.push(Screen.Security(c.id, c.name)) }
@@ -130,16 +128,13 @@ fun IndexScreen(id: String, name: String) {
 
 @Composable
 private fun ComponentRow(c: Component, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).testTag("component-${c.id}").padding(horizontal = 20.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        NameBlock(c.name, c.weight?.let { "⁦${Fmt.fixed(it, 2)}%⁩ מהמדד" }, Modifier.weight(1f))
+    PaperRow(SECURITY, c.companyId, Modifier.clickable(onClick = onClick).testTag("component-${c.id}")) {
+        NameBlock(c.name, c.weight?.let { "\u2066${Fmt.fixed(it, 2)}%\u2069 מהמדד" }, Modifier.weight(1f))
         if (c.last != null) {
-            Spacer(Modifier.width(12.dp))
-            Num(Fmt.trimmed(c.last), style = NumBody)
+            Spacer(Modifier.width(10.dp))
+            Num(Fmt.trimmed(c.last), style = NumBody.copy(fontWeight = FontWeight.SemiBold), flashOn = c.last)
         }
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(10.dp))
         ChangeChip(c.changePct)
     }
 }

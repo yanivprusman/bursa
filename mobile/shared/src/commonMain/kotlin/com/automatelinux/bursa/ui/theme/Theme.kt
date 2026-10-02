@@ -14,6 +14,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -92,8 +93,10 @@ data class MarketColors(
     val card: Color,
     /** Brand accent: the star, the active tab. */
     val accent: Color,
-    /** The header band behind the portfolio total. */
+    /** The header band behind the portfolio total and the lead index: top of its gradient… */
     val hero: Color,
+    /** …and the bottom. */
+    val heroDeep: Color,
     val onHero: Color,
     val onHeroMuted: Color,
 )
@@ -104,7 +107,7 @@ private val DarkMarket = MarketColors(
     flat = Color(0xFF98A4B8), flatSoft = Color(0xFF1F2A3C),
     card = Color(0xFF131D2E),
     accent = Gold,
-    hero = Color(0xFF16233D), onHero = Color(0xFFF4EBD9), onHeroMuted = Color(0xFFA9B6CC),
+    hero = Color(0xFF1D2E52), heroDeep = Color(0xFF111A2E), onHero = Color(0xFFF7F1E3), onHeroMuted = Color(0xFFA9B6CC),
 )
 
 private val LightMarket = MarketColors(
@@ -113,7 +116,7 @@ private val LightMarket = MarketColors(
     flat = Color(0xFF5A6474), flatSoft = Color(0xFFE9E6DE),
     card = Color(0xFFFFFFFF),
     accent = Color(0xFFB07A0C),
-    hero = Night, onHero = Color(0xFFF4EBD9), onHeroMuted = Color(0xFFA9B6CC),
+    hero = Color(0xFF22365E), heroDeep = Night, onHero = Color(0xFFF7F1E3), onHeroMuted = Color(0xFFA9B6CC),
 )
 
 val LocalMarketColors = staticCompositionLocalOf { DarkMarket }
@@ -145,7 +148,7 @@ private fun number(size: Int, weight: FontWeight, tracking: Float = 0f) = TextSt
     textDirection = TextDirection.Ltr,
 )
 
-val NumHero = number(40, FontWeight.SemiBold, -1f)
+val NumHero = number(42, FontWeight.SemiBold, -1f)
 val NumLarge = number(30, FontWeight.SemiBold, -0.5f)
 val NumMedium = number(17, FontWeight.SemiBold)
 val NumBody = number(15, FontWeight.Medium)
@@ -154,38 +157,53 @@ val NumTiny = number(11, FontWeight.Medium)
 
 private val base = Typography()
 
-private val AppTypography = Typography(
-    headlineMedium = base.headlineMedium.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.25).sp),
-    headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.Bold),
-    titleLarge = base.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 22.sp),
-    titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp, letterSpacing = 0.sp),
-    titleSmall = base.titleSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp),
-    bodyLarge = base.bodyLarge.copy(fontSize = 16.sp, lineHeight = 23.sp, letterSpacing = 0.sp),
-    bodyMedium = base.bodyMedium.copy(fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.sp),
-    bodySmall = base.bodySmall.copy(fontSize = 12.5.sp, lineHeight = 17.sp, letterSpacing = 0.sp),
-    labelLarge = base.labelLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp),
-    labelMedium = base.labelMedium.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
-    labelSmall = base.labelSmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
-)
+/** Every Material style, in the app's own typeface. */
+private fun typography(font: FontFamily): Typography {
+    fun TextStyle.own() = copy(fontFamily = font, letterSpacing = 0.sp)
+    return Typography(
+        displayLarge = base.displayLarge.own(),
+        displayMedium = base.displayMedium.own(),
+        displaySmall = base.displaySmall.own(),
+        headlineLarge = base.headlineLarge.own().copy(fontWeight = FontWeight.Bold),
+        headlineMedium = base.headlineMedium.own().copy(fontWeight = FontWeight.Bold, fontSize = 28.sp),
+        headlineSmall = base.headlineSmall.own().copy(fontWeight = FontWeight.Bold),
+        titleLarge = base.titleLarge.own().copy(fontWeight = FontWeight.Bold, fontSize = 21.sp),
+        titleMedium = base.titleMedium.own().copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
+        titleSmall = base.titleSmall.own().copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+        bodyLarge = base.bodyLarge.own().copy(fontSize = 16.sp, lineHeight = 23.sp),
+        bodyMedium = base.bodyMedium.own().copy(fontSize = 14.sp, lineHeight = 20.sp),
+        bodySmall = base.bodySmall.own().copy(fontSize = 12.5.sp, lineHeight = 17.sp),
+        labelLarge = base.labelLarge.own().copy(fontWeight = FontWeight.SemiBold),
+        labelMedium = base.labelMedium.own().copy(fontWeight = FontWeight.Medium),
+        labelSmall = base.labelSmall.own().copy(fontWeight = FontWeight.Medium),
+    )
+}
 
 private val AppShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
     small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(20.dp),
+    medium = RoundedCornerShape(18.dp),
+    large = RoundedCornerShape(24.dp),
     extraLarge = RoundedCornerShape(28.dp),
 )
 
-/** The app is Hebrew whatever the phone's language is, so the layout is always right-to-left. */
+/** The app's typeface, for the few text styles Material does not own (the Num* styles). */
+val LocalAppFont = staticCompositionLocalOf<FontFamily> { FontFamily.Default }
+
+/**
+ * The app is Hebrew whatever the phone's language is, so the layout is always right-to-left.
+ * [font] comes from the platform shell, which is where the font files live.
+ */
 @Composable
-fun AppTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+fun AppTheme(font: FontFamily, dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     CompositionLocalProvider(
         LocalMarketColors provides if (dark) DarkMarket else LightMarket,
         LocalLayoutDirection provides LayoutDirection.Rtl,
+        LocalAppFont provides font,
     ) {
         MaterialTheme(
             colorScheme = if (dark) DarkScheme else LightScheme,
-            typography = AppTypography,
+            typography = typography(font),
             shapes = AppShapes,
             content = content,
         )

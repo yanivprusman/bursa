@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.automatelinux.bursa.data.LocalApp
 import com.automatelinux.bursa.data.model.Tracked
+import com.automatelinux.bursa.ui.theme.LocalAppFont
 import com.automatelinux.bursa.ui.theme.NumMedium
 import com.automatelinux.bursa.util.Fmt
 
@@ -52,7 +53,7 @@ fun HoldingSheet(t: Tracked, lastPrice: Double?, onDone: () -> Unit) {
     val canSave = qty != null && qty > 0 && !costBad
 
     // Typed digits read left-to-right but sit by the Hebrew label, on the right.
-    val fieldStyle = NumMedium.copy(textAlign = TextAlign.End)
+    val fieldStyle = NumMedium.copy(textAlign = TextAlign.End, fontFamily = LocalAppFont.current)
 
     ModalBottomSheet(onDismissRequest = onDone, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).navigationBarsPadding().imePadding().padding(bottom = 20.dp)) {

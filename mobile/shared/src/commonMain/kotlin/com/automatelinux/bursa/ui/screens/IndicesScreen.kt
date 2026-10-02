@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.automatelinux.bursa.data.LocalApp
 import com.automatelinux.bursa.data.model.IndicesResponse
@@ -28,7 +29,7 @@ import com.automatelinux.bursa.nav.Screen
 import com.automatelinux.bursa.ui.components.BackButton
 import com.automatelinux.bursa.ui.components.ChangeChip
 import com.automatelinux.bursa.ui.components.FailedBlock
-import com.automatelinux.bursa.ui.components.LoadingBlock
+import com.automatelinux.bursa.ui.components.SkeletonRows
 import com.automatelinux.bursa.ui.components.NameBlock
 import com.automatelinux.bursa.ui.components.Num
 import com.automatelinux.bursa.ui.components.Refreshable
@@ -62,7 +63,7 @@ fun IndicesScreen() {
                 if (res.data == null) {
                     item {
                         val error = res.error
-                        if (error != null) FailedBlock(error, onRetry = { res.refresh() }) else LoadingBlock()
+                        if (error != null) FailedBlock(error, onRetry = { res.refresh() }) else SkeletonRows(9)
                     }
                     return@LazyColumn
                 }
@@ -80,7 +81,7 @@ fun IndicesScreen() {
                         ) {
                             NameBlock(row.name, null, Modifier.weight(1f))
                             Spacer(Modifier.width(12.dp))
-                            Num(Fmt.fixed(row.last, 2), style = NumBody)
+                            Num(Fmt.fixed(row.last, 2), style = NumBody.copy(fontWeight = FontWeight.SemiBold), flashOn = row.last)
                             Spacer(Modifier.width(12.dp))
                             ChangeChip(row.changePct)
                         }

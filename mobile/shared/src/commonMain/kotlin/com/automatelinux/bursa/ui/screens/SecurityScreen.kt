@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -34,7 +35,7 @@ import com.automatelinux.bursa.ui.components.Card
 import com.automatelinux.bursa.ui.components.Fact
 import com.automatelinux.bursa.ui.components.FactGrid
 import com.automatelinux.bursa.ui.components.FailedBlock
-import com.automatelinux.bursa.ui.components.LoadingBlock
+import com.automatelinux.bursa.ui.components.DayRange
 import com.automatelinux.bursa.ui.components.Refreshable
 import com.automatelinux.bursa.ui.components.SectionTitle
 import com.automatelinux.bursa.ui.components.StaleNote
@@ -51,7 +52,7 @@ fun SecurityScreen(id: String, name: String) {
     val tracked = portfolio.find(SECURITY, id)
     // What gets stored when the user follows or holds this paper. The name it was opened
     // under wins: search calls an ETF by its full name, the quote by a clipped one.
-    val self = Tracked(SECURITY, id, name, d?.symbol, d?.type)
+    val self = Tracked(SECURITY, id, name, d?.symbol, d?.type, companyId = d?.companyId)
 
     var editing by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf(false) }
@@ -63,7 +64,7 @@ fun SecurityScreen(id: String, name: String) {
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            DetailBar(name, followed = tracked != null) {
+            DetailBar(name, SECURITY, d?.companyId ?: tracked?.companyId, followed = tracked != null) {
                 when {
                     tracked == null -> { portfolio.follow(self); app.refreshQuotes() }
                     tracked.held -> removing = true
@@ -77,7 +78,7 @@ fun SecurityScreen(id: String, name: String) {
                 if (d == null) {
                     item {
                         val error = res.error
-                        if (error != null) FailedBlock(error, onRetry = { res.refresh() }) else LoadingBlock()
+                        if (error != null) FailedBlock(error, onRetry = { res.refresh() }) else DetailSkeleton()
                     }
                     return@LazyColumn
                 }
@@ -102,7 +103,21 @@ fun SecurityScreen(id: String, name: String) {
                 }
 
                 item { SectionTitle("נתוני מסחר", note = Fmt.date(d.tradeDate)) }
-                item { Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) { TradingFacts(d) } }
+                item {
+                    Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        Column {
+                            val low = d.low
+                            val high = d.high
+                            if (low != null && high != null && high > low) {
+                                DayRange(low, high, d.last, d.unit, Bursa.colors.of(d.changePct))
+                                Spacer(Modifier.height(10.dp))
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                Spacer(Modifier.height(4.dp))
+                            }
+                            TradingFacts(d)
+                        }
+                    }
+                }
 
                 val about = d.about
                 if (about != null) {
@@ -119,10 +134,10 @@ fun SecurityScreen(id: String, name: String) {
                                 if (site != null) {
                                     Spacer(Modifier.height(10.dp))
                                     Text(
-                                        site,
+                                        "\u2066$site\u2069",
                                         Modifier.clickable { app.platform.openUrl(if (site.startsWith("http")) site else "https://$site") }.testTag("company-site"),
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.primary,
+                                        color = Bursa.colors.accent,
                                     )
                                 }
                             }
@@ -154,8 +169,6 @@ private fun TradingFacts(d: SecurityDetail) {
         }
         price("שער פתיחה", d.open)
         price("שער בסיס", d.base)
-        price("גבוה יומי", d.high)
-        price("נמוך יומי", d.low)
         words("מחזור", d.turnover?.let { Fmt.bigShekels(it) })
         if (d.deals != null) add { m -> Fact("עסקאות", Fmt.fixed(d.deals, 0), m) }
         // Market cap arrives in thousands of shekels.

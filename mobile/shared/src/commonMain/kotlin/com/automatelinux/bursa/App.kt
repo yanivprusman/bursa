@@ -2,7 +2,10 @@ package com.automatelinux.bursa
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import com.automatelinux.bursa.data.Api
 import com.automatelinux.bursa.data.AppContext
 import com.automatelinux.bursa.data.KeyValueStore
@@ -38,6 +42,7 @@ fun App(
     baseUrl: String,
     store: KeyValueStore,
     platform: Platform,
+    font: FontFamily,
     active: Boolean,
     backHandler: @Composable (enabled: Boolean, onBack: () -> Unit) -> Unit,
 ) {
@@ -46,14 +51,19 @@ fun App(
     SideEffect { app.active = active }
     val nav = app.nav
 
-    AppTheme {
+    AppTheme(font) {
         CompositionLocalProvider(LocalApp provides app) {
             backHandler(nav.canGoBack) { nav.back() }
             val saveable = rememberSaveableStateHolder()
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 AnimatedContent(
                     targetState = nav.current,
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                    transitionSpec = {
+                        // The app is right-to-left: going deeper moves leftward, coming back rightward.
+                        val way = nav.direction
+                        (slideInHorizontally(tween(240)) { full -> -way * full / 7 } + fadeIn(tween(200))) togetherWith
+                            (slideOutHorizontally(tween(200)) { full -> way * full / 7 } + fadeOut(tween(140)))
+                    },
                     label = "screen",
                 ) { screen ->
                     Box(Modifier.fillMaxSize()) {

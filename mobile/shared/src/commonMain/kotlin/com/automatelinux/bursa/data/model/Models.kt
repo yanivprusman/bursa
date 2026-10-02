@@ -24,6 +24,8 @@ data class Quote(
     val unit: String = "agorot",
     val tradeDate: String? = null,
     val tradeTime: String? = null,
+    /** The issuer, for its logo; null for an index. */
+    val companyId: String? = null,
 )
 
 @Serializable
@@ -49,7 +51,12 @@ data class Mover(
     val last: Double,
     val changePct: Double,
     val turnover: Double? = null,
+    val companyId: String? = null,
 )
+
+/** One entry on the ticker strip. */
+@Serializable
+data class TapeItem(val id: String, val name: String, val last: Double, val changePct: Double? = null)
 
 @Serializable
 data class Movers(
@@ -70,6 +77,7 @@ data class Overview(
     val tradeDate: String? = null,
     val tradeTime: String? = null,
     val indices: List<IndexRow> = emptyList(),
+    val tape: List<TapeItem> = emptyList(),
     val movers: Movers = Movers(),
     val breadth: Breadth? = null,
     val turnovers: List<SegmentTurnover> = emptyList(),
@@ -110,8 +118,9 @@ data class SecurityDetail(
     val annualInterest: Double? = null,
     val about: String? = null,
     val site: String? = null,
+    val companyId: String? = null,
 ) {
-    fun quote() = Quote(SECURITY, id, name, symbol, type, last, base, change, changePct, unit, tradeDate, tradeTime)
+    fun quote() = Quote(SECURITY, id, name, symbol, type, last, base, change, changePct, unit, tradeDate, tradeTime, companyId)
 }
 
 @Serializable
@@ -123,6 +132,7 @@ data class Component(
     val changePct: Double? = null,
     val weight: Double? = null,
     val turnover: Double? = null,
+    val companyId: String? = null,
 )
 
 @Serializable
@@ -172,6 +182,7 @@ data class Hit(
     val symbol: String? = null,
     val type: String? = null,
     val isin: String? = null,
+    val companyId: String? = null,
 )
 
 @Serializable
@@ -195,6 +206,7 @@ data class Tracked(
     val type: String? = null,
     val qty: Double? = null,
     val avgCost: Double? = null,
+    val companyId: String? = null,
 ) {
     val key: String get() = refKey(kind, id)
     val held: Boolean get() = (qty ?: 0.0) > 0

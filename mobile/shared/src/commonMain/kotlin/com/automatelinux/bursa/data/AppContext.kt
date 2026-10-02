@@ -5,11 +5,13 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.ImageBitmap
 import com.automatelinux.bursa.data.model.Overview
 import com.automatelinux.bursa.data.model.Quote
 import com.automatelinux.bursa.data.model.QuotesResponse
 import com.automatelinux.bursa.data.model.refKey
 import com.automatelinux.bursa.nav.Navigator
+import com.automatelinux.bursa.nav.Tab
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -31,7 +33,7 @@ class AppContext(
     private val scope: CoroutineScope,
 ) {
     val portfolio = Portfolio(store)
-    val nav = Navigator(if (portfolio.items.isEmpty()) com.automatelinux.bursa.nav.Tab.Market else com.automatelinux.bursa.nav.Tab.Mine)
+    val nav = Navigator(if (portfolio.items.isEmpty()) Tab.Market else Tab.Mine)
 
     /** True between onStart and onStop — nothing polls while the app is in the background. */
     var active by mutableStateOf(false)
@@ -51,6 +53,28 @@ class AppContext(
     /** Papers the exchange no longer answers for (delisted, redeemed), by [refKey]. */
     val quotesMissing = mutableStateMapOf<String, String>()
     private var quotesLoading = false
+
+    /** Decoded logos by company id. A key that maps to null is a company known to have none. */
+    private val logos = mutableStateMapOf<String, ImageBitmap?>()
+    private val logosAsked = mutableSetOf<String>()
+
+    /**
+     * The logo for [companyId] if it has arrived, else null — and the first call for an id
+     * starts fetching it, so the tile fills in by itself when it lands.
+     */
+    fun logo(companyId: String): ImageBitmap? {
+        if (logosAsked.add(companyId)) {
+            scope.launch {
+                try {
+                    logos[companyId] = api.logo(companyId)?.let { decodeImage(it) }
+                } catch (e: Exception) {
+                    // Offline: leave it unasked so the next screen tries again.
+                    logosAsked.remove(companyId)
+                }
+            }
+        }
+        return logos[companyId]
+    }
 
     init {
         store.get(QUOTES_KEY)

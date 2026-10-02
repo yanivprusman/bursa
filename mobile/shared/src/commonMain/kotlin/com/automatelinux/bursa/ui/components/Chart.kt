@@ -18,7 +18,9 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -58,14 +60,17 @@ fun PriceChart(
     color: Color,
     guide: Color,
     modifier: Modifier = Modifier,
-    onScrub: (Int?) -> Unit,
+    /** False for a chart that is only a picture (the lead index on the home screen). */
+    interactive: Boolean = true,
+    onScrub: (Int?) -> Unit = {},
 ) {
     var scrub by remember(values) { mutableStateOf<Int?>(null) }
     val report by rememberUpdatedState(onScrub)
+    val haptics = LocalHapticFeedback.current
 
     Canvas(
-        modifier.pointerInput(values) {
-            if (values.size < 2) return@pointerInput
+        modifier.pointerInput(values, interactive) {
+            if (values.size < 2 || !interactive) return@pointerInput
             fun indexAt(x: Float) = ((x / (size.width - END_INSET.toPx())) * (values.size - 1)).roundToInt().coerceIn(0, values.lastIndex)
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
@@ -80,8 +85,13 @@ fun PriceChart(
                     if (!mine && dx > viewConfiguration.touchSlop && dx > dy) mine = true
                     if (!mine && dy > viewConfiguration.touchSlop) break
                     if (mine) change.consume()
-                    scrub = indexAt(change.position.x)
-                    report(scrub)
+                    val at = indexAt(change.position.x)
+                    if (at != scrub) {
+                        // One light tick per point crossed: the finger feels the chart's grain.
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        scrub = at
+                        report(at)
+                    }
                 }
                 scrub = null
                 report(null)
@@ -119,7 +129,7 @@ fun PriceChart(
                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 5.dp.toPx())),
             )
         }
-        drawPath(line, color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+        drawPath(line, color, style = Stroke(2.25.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
 
         val at = scrub
         if (at != null) {

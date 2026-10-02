@@ -1,7 +1,5 @@
 package com.automatelinux.bursa.ui.screens
 
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,12 +11,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +39,9 @@ import com.automatelinux.bursa.data.model.ChartData
 import com.automatelinux.bursa.data.model.Quote
 import com.automatelinux.bursa.data.rememberResource
 import com.automatelinux.bursa.ui.components.BackButton
+import com.automatelinux.bursa.ui.components.LogoTile
+import com.automatelinux.bursa.ui.components.Segmented
+import com.automatelinux.bursa.ui.components.Skeleton
 import com.automatelinux.bursa.ui.components.Num
 import com.automatelinux.bursa.ui.components.PriceChart
 import com.automatelinux.bursa.ui.theme.Bursa
@@ -55,15 +54,17 @@ import com.automatelinux.bursa.ui.theme.of
 import com.automatelinux.bursa.util.Fmt
 import kotlin.math.abs
 
-/** Back, the paper's name, and the star that follows or unfollows it. */
+/** Back, the paper's face and name, and the star that follows or unfollows it. */
 @Composable
-fun DetailBar(title: String, followed: Boolean, onToggleFollow: () -> Unit) {
+fun DetailBar(title: String, kind: String, companyId: String?, followed: Boolean, onToggleFollow: () -> Unit) {
     val app = LocalApp.current
     Row(
         Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BackButton { app.nav.back() }
+        LogoTile(kind, companyId, size = 34.dp)
+        Spacer(Modifier.width(10.dp))
         Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         IconButton(onClick = onToggleFollow, modifier = Modifier.testTag("toggle-follow")) {
             if (followed) Icon(Icons.Filled.Star, "הסרה מהמעקב", tint = Bursa.colors.accent)
@@ -82,7 +83,7 @@ fun PriceHeader(q: Quote, sub: String?) {
             Spacer(Modifier.height(6.dp))
         }
         Row(verticalAlignment = Alignment.Bottom) {
-            Num(Fmt.price(q.last, q.unit), style = NumHero)
+            Num(Fmt.price(q.last, q.unit), style = NumHero, flashOn = q.last)
             Spacer(Modifier.width(8.dp))
             Text(
                 if (q.unit == "points") "נק'" else "אג'",
@@ -115,11 +116,11 @@ private val RANGES = listOf(
     Triple("1d", "יום", "מול סגירה קודמת"),
     Triple("1w", "שבוע", "בשבוע האחרון"),
     Triple("1m", "חודש", "בחודש האחרון"),
-    Triple("3m", "3 חודשים", "ב-3 חודשים"),
-    Triple("6m", "חצי שנה", "בחצי שנה"),
+    Triple("3m", "3ח'", "ב-3 חודשים"),
+    Triple("6m", "6ח'", "בחצי שנה"),
     Triple("1y", "שנה", "בשנה האחרונה"),
-    Triple("3y", "3 שנים", "ב-3 שנים"),
-    Triple("5y", "5 שנים", "ב-5 שנים"),
+    Triple("3y", "3ש'", "ב-3 שנים"),
+    Triple("5y", "5ש'", "ב-5 שנים"),
 )
 
 /**
@@ -189,7 +190,7 @@ fun ChartBlock(kind: String, id: String, unit: String) {
                     Text(error, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     TextButton(onClick = { res.refresh() }) { Text("נסו שוב") }
                 }
-                data == null -> CircularProgressIndicator(Modifier.size(26.dp), strokeWidth = 2.5.dp)
+                data == null -> Skeleton(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 14.dp))
                 else -> Text(
                     if (intraday) "עדיין אין עסקאות היום" else "אין נתונים לתקופה הזאת",
                     style = MaterialTheme.typography.bodyMedium,
@@ -214,19 +215,31 @@ fun ChartBlock(kind: String, id: String, unit: String) {
             }
         }
 
-        Spacer(Modifier.height(8.dp))
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            RANGES.forEach { (key, text, _) ->
-                FilterChip(
-                    selected = range == key,
-                    onClick = { range = key },
-                    label = { Text(text) },
-                    modifier = Modifier.testTag("range-$key"),
-                )
-            }
-        }
+        Spacer(Modifier.height(10.dp))
+        Segmented(
+            RANGES.map { it.second },
+            selected = RANGES.indexOfFirst { it.first == range },
+            onSelect = { range = RANGES[it].first },
+            modifier = Modifier.padding(horizontal = 16.dp),
+            tag = "range",
+        )
+    }
+}
+
+/** A detail page's outline while it loads: the price, the chart, the first card. */
+@Composable
+fun DetailSkeleton() {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+        Skeleton(Modifier.width(150.dp).height(12.dp))
+        Spacer(Modifier.height(12.dp))
+        Skeleton(Modifier.width(190.dp).height(44.dp))
+        Spacer(Modifier.height(10.dp))
+        Skeleton(Modifier.width(130.dp).height(16.dp))
+        Spacer(Modifier.height(22.dp))
+        Skeleton(Modifier.fillMaxWidth().height(210.dp), RoundedCornerShape(18.dp))
+        Spacer(Modifier.height(14.dp))
+        Skeleton(Modifier.fillMaxWidth().height(40.dp), RoundedCornerShape(14.dp))
+        Spacer(Modifier.height(22.dp))
+        Skeleton(Modifier.fillMaxWidth().height(150.dp), RoundedCornerShape(18.dp))
     }
 }

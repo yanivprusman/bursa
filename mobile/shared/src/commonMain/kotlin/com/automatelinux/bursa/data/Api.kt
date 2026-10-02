@@ -5,6 +5,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.HttpClientConfig
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
@@ -15,6 +16,8 @@ import kotlinx.serialization.json.Json
 interface KeyValueStore {
     fun get(key: String): String?
     fun put(key: String, value: String)
+    fun getBytes(key: String): ByteArray?
+    fun putBytes(key: String, value: ByteArray)
 }
 
 class ApiException(message: String, val status: Int? = null) : Exception(message)
@@ -53,6 +56,30 @@ class Api(baseUrl: String, private val cache: KeyValueStore) {
         return text
     }
 
+    /**
+     * A company's logo. Null means the exchange has none (a 404) — which is an answer, and is
+     * remembered as one. A network failure throws instead, so it is retried next launch.
+     */
+    suspend fun logo(companyId: String): ByteArray? {
+        val key = "logo:$companyId"
+        cache.getBytes(key)?.let { return it.takeIf { b -> b.isNotEmpty() } }
+        val resp = try {
+            client.get("$base/api/logo/$companyId")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw ApiException("אין חיבור לשרת")
+        }
+        if (resp.status.value == 404) {
+            cache.putBytes(key, ByteArray(0))
+            return null
+        }
+        if (!resp.status.isSuccess()) throw ApiException("שגיאת שרת ${resp.status.value}", resp.status.value)
+        val bytes = resp.bodyAsBytes()
+        cache.putBytes(key, bytes)
+        return bytes
+    }
+
     /** The last good response for [path], or null. */
     fun <T> cached(path: String, ser: KSerializer<T>): T? =
         cache.get("api:$path")?.let { runCatching { json.decodeFromString(ser, it) }.getOrNull() }
@@ -69,6 +96,9 @@ class Api(baseUrl: String, private val cache: KeyValueStore) {
         return value
     }
 }
+
+/** A PNG/JPEG as something Compose can draw; null when the bytes are not an image. */
+expect fun decodeImage(bytes: ByteArray): androidx.compose.ui.graphics.ImageBitmap?
 
 /** Percent-encode a query value (Hebrew search text). */
 fun encodeQuery(text: String): String {
