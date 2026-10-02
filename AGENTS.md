@@ -28,5 +28,13 @@ contract, with units) before changing either side.
   as a falling one.
 - **Holdings are user data.** Removing a held paper asks first (`ConfirmRemoveHolding`);
   installs are always `-r`, never an uninstall.
+- **Lists show a face**: `LogoTile(kind, companyId)`. Logos come from `/api/logo/<companyId>`;
+  the exchange answers a company with no logo with a generic PNG, which the route
+  rejects (real logos are JPEG) so the tile shows the candlestick mark instead.
+- **A live number passes its value as `flashOn`** to `Num` so it flashes on change.
+- **Choices are `Segmented`**, loading is `Skeleton`/`SkeletonRows` — not Material's
+  default chips or a bare spinner.
+- The typeface lives in `mobile/app/src/main/res/font` and is handed to `App(font = …)`;
+  `Num` applies it itself because the `Num*` styles are not Material's.
 - Interactive elements carry a `testTag` (the Compose counterpart of `data-id`).
 

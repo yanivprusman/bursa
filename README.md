@@ -21,6 +21,26 @@ index one search away, a watchlist, and what your own holdings are worth today.
   everything in it by weight.
 - **Search** — Hebrew or English name, symbol, security number or ISIN.
 
+## How it looks, and why
+
+The design is **the quote board**: blue-black like a board after hours, numbers in
+warm white, and exactly two colours that mean something — green for up, red for
+down. Gold is the brand accent and never marks a number that moved.
+
+- **Typeface** — IBM Plex Sans Hebrew (bundled, OFL): Hebrew, Latin and even-width
+  digits from one family, so a column of prices lines up and a live price does
+  not jitter.
+- **Ticker strip** — the indices glide past under the search field, as on the wall
+  of an exchange. It reads left to right; tapping it opens every index.
+- **The lead card** — ת"א-35, large, over the line it drew today.
+- **Faces** — every share, ETF and bond carries its issuer's logo (the exchange
+  publishes them; the server relays them). An index, or a company with no logo,
+  gets the candlestick mark.
+- **Prices that tick** — when a number changes between two refreshes it flashes
+  green or red for a second.
+- **Icon** — the letter ב (for בורסה) in gold with two candlesticks standing in
+  its opening: letter and trading chart as one shape.
+
 ## Where things live
 
 **The server holds nothing personal.** The watchlist and the holdings are stored
