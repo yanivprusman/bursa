@@ -6,10 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test 'test/*.test.mts'"
   },
   "dependencies": {
     "@addnewfeature/feedback-lib-launcher": "file:../../automateLinux/packages/feedback-lib-launcher",
+    "@automatelinux/token-auth": "file:../../automateLinux/packages/token-auth",
     "@claudecontrol/feedback-lib": "file:../../automateLinux/packages/feedback-lib",
     "next": "16.3.8",
     "react": "19.2.8",

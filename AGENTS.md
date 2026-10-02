@@ -26,6 +26,12 @@ contract, with units) before changing either side.
   number inside Hebrew text is wrapped in U+2066…U+2069.
 - **Never use an auto-mirrored icon for a chart** — flipped for RTL, a rising line reads
   as a falling one.
+- **The list is on the server** (`lib/list.ts`, `/api/list`), shared by phone and desktop,
+  changed only by single operations. Never write-test against the real file: tests set
+  `BURSA_DATA_DIR` to a temp directory, and so must any manual check.
+- **The desktop app is `app/_ui/`** — client components over the same `/api`. Its number
+  formatting (`format.ts`) and portfolio maths (`portfolio.ts`) mirror the phone's `Fmt` and
+  `PortfolioMath.kt`; change both together, the two test suites carry the same cases.
 - **Holdings are user data.** Removing a held paper asks first (`ConfirmRemoveHolding`);
   installs are always `-r`, never an uninstall.
 - **Lists show a face**: `LogoTile(kind, companyId)`. Logos come from `/api/logo/<companyId>`;

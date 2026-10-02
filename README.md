@@ -6,6 +6,7 @@ index one search away, a watchlist, and what your own holdings are worth today.
 | | |
 | :--- | :--- |
 | Phone app | `mobile/` — Kotlin Multiplatform + Compose, Android package `com.automatelinux.bursa.dev`, launcher name **בורסה** |
+| Desktop | the same server's page — `http://localhost:3169` (or `http://10.7.0.2:3169` over WireGuard) |
 | Server | this directory — Next.js, dev port **3169** (`d getPort --key bursa-dev`) |
 | Contract between them | [`API.md`](API.md) |
 
@@ -41,12 +42,34 @@ down. Gold is the brand accent and never marks a number that moved.
 - **Icon** — the letter ב (for בורסה) in gold with two candlesticks standing in
   its opening: letter and trading chart as one shape.
 
+## The desktop version
+
+One screen, three panes: **your list** on the right (portfolio worth, holdings,
+watchlist), **the chosen paper** in the middle (price, a chart with a crosshair,
+the day's range, trading facts, and for an index everything in it as a table),
+**the market** on the left (indices, the day's mood, movers). The ticker runs
+across the top; `/` jumps to search; the chosen paper is in the address bar
+(`?p=s629014`), so back and forward walk through what you looked at.
+
+It is the same list as the phone. Follow something on one and it is on the other
+within half a minute.
+
 ## Where things live
 
-**The server holds nothing personal.** The watchlist and the holdings are stored
-on the phone (`Portfolio.kt`, app-private storage, included in Android's backup).
-The server only relays what the exchange already publishes, which is why it has
-no accounts and no auth.
+**One list, on your own server.** The watchlist and the holdings are kept in one
+JSON file on this machine (`data/bursa/<dev|prod>/list.json` under automateLinux)
+and shared by the phone and the desktop. The phone keeps a copy so it opens with
+the list at once and still shows it with no connection. It is the only private
+thing the server holds, and it is guarded: the phone sends `BURSA_API_TOKEN` as a
+bearer token (baked into the APK from the gitignored `mobile/.env`), and a browser
+signs in once — paste the token, or use a timed link:
+
+```bash
+node scripts/make-link.mjs            # a 10-minute sign-in link for this machine
+node scripts/make-link.mjs 60 http://10.7.0.2:3169   # an hour, for another device on the VPN
+```
+
+Market data stays open: it is what the exchange already publishes.
 
 **The server is the only thing that talks to the exchange.** TASE has no free
 public API, so `lib/tase.ts` reads the JSON endpoints its own website calls. They
@@ -56,7 +79,7 @@ market trades, 5 min once it has closed), shares identical requests in flight
 and never opens more than four at once.
 
 The phone reaches the server directly over WireGuard (`http://10.7.0.2:3169/`,
-baked in from the gitignored `mobile/.env`), never through nginx.
+baked in from `mobile/.env`), never through nginx.
 
 ## Units — the one thing to get right
 
@@ -69,7 +92,8 @@ bond the quantity is its par value in shekels.
 
 ```bash
 d restartApp --app bursa                      # server
-cd mobile && ./gradlew :shared:testDebugUnitTest   # formatting + portfolio maths
+npm test                                      # the list store, and the desktop's formatting + portfolio maths
+cd mobile && ./gradlew :shared:testDebugUnitTest   # the phone's formatting + portfolio maths
 androidDeploy bursa                           # build the dev flavor and install it on the phone
 ```
 

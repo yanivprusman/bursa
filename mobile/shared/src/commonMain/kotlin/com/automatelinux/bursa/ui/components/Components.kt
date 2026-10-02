@@ -519,3 +519,35 @@ fun DayRange(low: Double, high: Double, last: Double, unit: String, tone: Color,
         }
     }
 }
+
+/**
+ * The list could not be brought in line with the server, or a change did not stick. It sits
+ * over whatever screen is showing — a change can be made from several of them — until it is
+ * retried or dismissed.
+ */
+@Composable
+fun SyncNotice(message: String, onRetry: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.inverseSurface)
+            .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+            .testTag("sync-notice"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            message,
+            Modifier.weight(1f).padding(vertical = 8.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.inverseOnSurface,
+        )
+        TextButton(onClick = onRetry, modifier = Modifier.testTag("sync-retry")) {
+            Text("נסו שוב", color = MaterialTheme.colorScheme.inversePrimary)
+        }
+        TextButton(onClick = onDismiss, modifier = Modifier.testTag("sync-dismiss")) {
+            Text("סגירה", color = MaterialTheme.colorScheme.inverseOnSurface)
+        }
+    }
+}

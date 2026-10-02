@@ -89,6 +89,7 @@ class MainActivity : ComponentActivity() {
             }
             App(
                 baseUrl = BuildConfig.API_BASE_URL,
+                token = BuildConfig.API_TOKEN,
                 store = store,
                 platform = platform,
                 font = plex,

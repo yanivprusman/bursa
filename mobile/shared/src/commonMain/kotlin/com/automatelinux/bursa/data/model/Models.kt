@@ -212,5 +212,9 @@ data class Tracked(
     val held: Boolean get() = (qty ?: 0.0) > 0
 }
 
+/** The owner's list as the server keeps it (`/api/list`). */
+@Serializable
+data class ListResponse(val rev: Int = 0, val items: List<Tracked> = emptyList())
+
 @Serializable
 data class Saved(val items: List<Tracked> = emptyList(), val recent: List<Tracked> = emptyList())

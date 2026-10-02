@@ -59,7 +59,7 @@ fun HoldingSheet(t: Tracked, lastPrice: Double?, onDone: () -> Unit) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).navigationBarsPadding().imePadding().padding(bottom = 20.dp)) {
             Text(t.name, style = MaterialTheme.typography.titleLarge)
             Text(
-                "ההחזקה נשמרת בטלפון הזה בלבד.",
+                "ההחזקה נשמרת בשרת שלך ומוצגת גם במחשב.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

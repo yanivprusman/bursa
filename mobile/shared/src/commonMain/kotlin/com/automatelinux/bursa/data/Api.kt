@@ -1,16 +1,24 @@
 package com.automatelinux.bursa.data
 
 import com.automatelinux.bursa.data.model.ErrorResponse
+import com.automatelinux.bursa.data.model.ListResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.HttpClientConfig
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 /** Small strings that survive a restart: the last good responses, and the user's own list. */
 interface KeyValueStore {
@@ -24,8 +32,11 @@ class ApiException(message: String, val status: Int? = null) : Exception(message
 
 expect fun createHttpClient(config: HttpClientConfig<*>.() -> Unit): HttpClient
 
-/** The bursa server (see API.md). Read-only: every call is a GET. */
-class Api(baseUrl: String, private val cache: KeyValueStore) {
+/**
+ * The bursa server (see API.md). Market data is open and read-only; the owner's list is the
+ * one private thing, and the one thing this app writes — those calls carry the bearer token.
+ */
+class Api(baseUrl: String, private val token: String, private val cache: KeyValueStore) {
     private val base = baseUrl.trimEnd('/')
 
     val json = Json { ignoreUnknownKeys = true; explicitNulls = false; coerceInputValues = true }
@@ -55,6 +66,46 @@ class Api(baseUrl: String, private val cache: KeyValueStore) {
         }
         return text
     }
+
+    private suspend fun listCall(body: String?): ListResponse {
+        val resp = try {
+            if (body == null) {
+                client.get("$base/api/list") { header(HttpHeaders.Authorization, "Bearer $token") }
+            } else {
+                client.post("$base/api/list") {
+                    header(HttpHeaders.Authorization, "Bearer $token")
+                    contentType(ContentType.Application.Json)
+                    setBody(body)
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw ApiException("אין חיבור לשרת")
+        }
+        val text = resp.bodyAsText()
+        if (!resp.status.isSuccess()) {
+            val said = runCatching { json.decodeFromString(ErrorResponse.serializer(), text).error }.getOrNull()
+            throw ApiException(
+                when (resp.status.value) {
+                    401 -> "השרת לא מזהה את האפליקציה (קוד גישה)"
+                    else -> said?.takeIf { it.isNotBlank() } ?: "שגיאת שרת ${resp.status.value}"
+                },
+                resp.status.value,
+            )
+        }
+        return try {
+            json.decodeFromString(ListResponse.serializer(), text)
+        } catch (e: Exception) {
+            throw ApiException("תשובה לא צפויה מהשרת")
+        }
+    }
+
+    /** The owner's list, shared with the desktop. */
+    suspend fun list(): ListResponse = listCall(null)
+
+    /** One change to the list — follow, unfollow, hold, clearHolding, import. Returns the list after it. */
+    suspend fun listOp(op: JsonObject): ListResponse = listCall(op.toString())
 
     /**
      * A company's logo. Null means the exchange has none (a 404) — which is an answer, and is

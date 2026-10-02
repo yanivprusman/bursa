@@ -32,7 +32,7 @@ class AppContext(
     val platform: Platform,
     private val scope: CoroutineScope,
 ) {
-    val portfolio = Portfolio(store)
+    val portfolio = Portfolio(store, api, scope)
     val nav = Navigator(if (portfolio.items.isEmpty()) Tab.Market else Tab.Mine)
 
     /** True between onStart and onStop — nothing polls while the app is in the background. */
@@ -127,6 +127,8 @@ class AppContext(
     fun refreshHome(byUser: Boolean = false) {
         overview.refresh(byUser)
         refreshQuotes(byUser)
+        // The desktop can change the list too; if it did, price what is new.
+        portfolio.sync(onChanged = { refreshQuotes() })
     }
 
     private companion object {
