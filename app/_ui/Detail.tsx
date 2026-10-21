@@ -5,6 +5,7 @@ import type { ChartData, IndexDetail, Paper, Range, SecurityDetail, Side, Tracke
 import { useResource, type AccountState, type ListState, type Selection } from './hooks';
 import * as F from './format';
 import { PriceChart } from './Chart';
+import { StrategyCard } from './Strategy';
 import { Chip, DayRange, Logo, Num, Segmented, Skeleton, tone } from './parts';
 import { holdingValue } from './portfolio';
 
@@ -203,6 +204,7 @@ function SecurityView({ sel, live, list, account, onTrade }: Common) {
       <PriceLine last={d.last} unit={d.unit} change={d.change} changePct={d.changePct} tradeDate={d.tradeDate} tradeTime={d.tradeTime} />
       {res.error && <div className="note bad">{res.error} — מוצגים הנתונים האחרונים</div>}
       <ChartCard sel={sel} unit={d.unit} live={live} />
+      {list.signedIn && <StrategyCard id={d.id} live={live} />}
 
       <div className="d-grid">
         <div className="card">

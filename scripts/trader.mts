@@ -26,7 +26,9 @@ import { readList } from '../lib/list.ts';
 import { readText, writeJson } from '../lib/store.ts';
 import { recordDay } from '../lib/ticks.ts';
 import { bars, closedBars } from '../lib/strategy/bars.ts';
-import { STRATEGY, decide, params, type Holding, type Params, type Reason } from '../lib/strategy/emaVwap.ts';
+import { STRATEGY, decide, params, type Holding } from '../lib/strategy/emaVwap.ts';
+import { readConfig, type Config } from '../lib/strategy/config.ts';
+import { readJournal, writeJournal, type Day, type Event, type TraderStatus } from '../lib/strategy/journal.ts';
 
 const LOOP_MS = 20_000;
 /** Seconds after a bar's end before it counts as complete: the feed is a little behind the trades. */
@@ -41,15 +43,14 @@ const log = (...a: unknown[]) => console.log(new Date().toISOString(), ...a);
 
 // ── what the owner asked for ────────────────────────────────────────────────
 
-type Config = { enabled: boolean; papers: string[]; params: Params };
-
-/** strategy.json — written by the web server (/api/strategy). Missing = off. */
+/** A damaged strategy.json switches the strategy off — recording carries on regardless. */
 async function config(): Promise<Config> {
-  const text = await readText('strategy.json');
-  if (text === null) return { enabled: false, papers: [], params: params({}) };
-  const raw = JSON.parse(text) as { enabled?: unknown; papers?: unknown; params?: unknown };
-  const papers = Array.isArray(raw.papers) ? raw.papers.filter((x): x is string => typeof x === 'string' && /^\d{1,9}$/.test(x)) : [];
-  return { enabled: raw.enabled === true, papers, params: params(raw.params) };
+  try {
+    return await readConfig();
+  } catch (e) {
+    log(`strategy off: ${e instanceof Error ? e.message : e}`);
+    return { rev: -1, enabled: false, papers: [], params: params({}) };
+  }
 }
 
 async function account(): Promise<Account | null> {
@@ -82,16 +83,6 @@ function holding(a: Account | null, id: string): (Holding & { qty: number }) | n
 
 // ── the day's decisions ─────────────────────────────────────────────────────
 
-type Event = { at: string; bar: string; side: 'buy' | 'sell'; reason: Reason; qty: number; signal: string; orderId: string | null; price: number | null; error: string | null };
-type Day = { date: string; papers: Record<string, { lastBar: string | null; events: Event[] }> };
-
-const dayFile = (date: string) => `strategy/${date}.json`;
-
-async function readDayLog(date: string): Promise<Day> {
-  const text = await readText(dayFile(date));
-  return text === null ? { date, papers: {} } : (JSON.parse(text) as Day);
-}
-
 async function runStrategy(id: string, ticks: Tick[], date: string, now: Date, cfg: Config, day: Day): Promise<boolean> {
   const p = cfg.params;
   const done = closedBars(bars(ticks, p.barMinutes, p.emaPeriod), israelClock(now), GRACE_SEC);
@@ -109,7 +100,7 @@ async function runStrategy(id: string, ticks: Tick[], date: string, now: Date, c
   const pos = holding(await account(), id);
   const d = decide(done, last, pos, date, p);
   if (!d) {
-    await writeJson(dayFile(date), day);
+    await writeJournal(day);
     return true;
   }
   const qty = d.side === 'sell' ? pos!.qty : Math.floor(p.budget / bar.c);
@@ -117,7 +108,7 @@ async function runStrategy(id: string, ticks: Tick[], date: string, now: Date, c
   const ev: Event = { at: now.toISOString(), bar: bar.t, side: d.side, reason: d.reason, qty, signal: by.signal, orderId: null, price: null, error: null };
   mine.events.push(ev);
   // Written down before the order goes: a restart from here never decides this bar again.
-  await writeJson(dayFile(date), day);
+  await writeJournal(day);
 
   if (qty <= 0) ev.error = 'התקציב קטן ממחיר יחידה אחת';
   else {
@@ -132,7 +123,7 @@ async function runStrategy(id: string, ticks: Tick[], date: string, now: Date, c
     }
   }
   log(`[${id}] ${bar.t} ${d.side} ${qty} (${d.reason})`, ev.error ? `FAILED: ${ev.error}` : `filled at ${ev.price}`);
-  await writeJson(dayFile(date), day);
+  await writeJournal(day);
   return true;
 }
 
@@ -162,8 +153,7 @@ async function papersToRecord(cfg: Config): Promise<{ strategy: string[]; others
   return { strategy, others: [...others] };
 }
 
-type Status = { at: string; pid: number; marketOpen: boolean; enabled: boolean; papers: Record<string, { recordedAt: string | null; trades: number; tradeDate: string | null; error: string | null }> };
-const status: Status = { at: '', pid: process.pid, marketOpen: false, enabled: false, papers: {} };
+const status: TraderStatus = { at: '', pid: process.pid, marketOpen: false, enabled: false, papers: {} };
 
 async function loop() {
   const now = new Date();
@@ -180,7 +170,7 @@ async function loop() {
     return now.getTime() - (lastRecorded.get(id) ?? 0) >= OTHERS_EVERY_MS;
   };
   const today = israelDate(now);
-  const day = open && strategy.length > 0 ? await readDayLog(today) : null;
+  const day = open && strategy.length > 0 ? await readJournal(today) : null;
 
   await Promise.all(
     [...strategy, ...others].filter(due).map(async (id) => {

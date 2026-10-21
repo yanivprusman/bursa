@@ -146,3 +146,15 @@ test('the file lock: one holder at a time, across processes; a dead holder\'s lo
   await withFileLock('b.json', async () => {});
   assert.ok(Date.now() - t1 < 1000);
 });
+
+test('outcome: round trips sized by the budget, with the account\'s fees on both sides', async () => {
+  const { outcome } = await import('../lib/strategy/outcome.ts');
+  // ₪10,000 at 100 agorot = 10,000 units; sold at 102 → gross gain ₪200, fees ₪10 + ₪10.2
+  const o = outcome([{ t: '10:30', side: 'buy', reason: 'cross-up', price: 100 }, { t: '11:00', side: 'sell', reason: 'below-ema', price: 102 }], null, P);
+  assert.deepEqual([o.trips, o.wins, o.open], [1, 1, false]);
+  assert.equal(o.pnl, 20_000 - 1_000 - 1_020);
+  // A position still open at the end of the record is valued at the last close.
+  const open = outcome([{ t: '10:30', side: 'buy', reason: 'cross-up', price: 100 }], 99, P);
+  assert.equal(open.open, true);
+  assert.ok(open.pnl < 0);
+});

@@ -90,6 +90,35 @@ and never opens more than four at once.
 The phone reaches the server directly over WireGuard (`http://10.7.0.2:3169/`,
 baked in from `mobile/.env`), never through nginx.
 
+## The trader — a strategy on the practice account
+
+`scripts/trader.mts`, run as **`bursa-trader-dev.service`** — a service of its own, not
+part of the web server, so a code reload, an idle stop or a closed browser never stops
+it. Every 20 s while the exchange trades it:
+
+1. **Records** the day's trades — every paper in ת"א-35, the watchlist and what is
+   held — into `ticks/<date>/<id>.json`. The exchange keeps minute-level data for
+   **today only** and clears it before the next opening, so this record is the only
+   history there will be. It started on 21.10.2026.
+2. **Runs the strategy** on the papers it was switched on for (desktop: the
+   *אסטרטגיה* card on a share). Today there is one, **EMA-9 × VWAP** on 3-minute bars
+   (`lib/strategy/emaVwap.ts`): buy when the EMA crosses up through the session VWAP,
+   sell when a bar closes under the EMA, at a 1.5% stop, or at 17:00 (Friday 13:30).
+   Long only — the account cannot short. Each entry is ₪10,000.
+
+One copy of the logic (`lib/strategy/`) draws the chart, drives the trader and replays
+recorded days, so they cannot disagree. Decisions are made on completed bars only.
+Restart-safe: a decision is written to `strategy/<date>.json` before its order is sent,
+each order carries its signal and the account refuses a second order for the same one,
+and after a gap only the latest bar is decided. `account.json` is guarded by a
+cross-process lock (`withFileLock`, `lib/store.ts`) because two processes now write it.
+
+```bash
+journalctl -u bursa-trader-dev -f                  # what it decides, as it decides
+node scripts/backtest.mts                          # replay every recorded day
+node scripts/backtest.mts 629014 stopPct=1         # one paper, other rules
+```
+
 ## Units — the one thing to get right
 
 The exchange quotes every traded security in **agorot** and every index in
@@ -101,7 +130,7 @@ bond the quantity is its par value in shekels.
 
 ```bash
 d restartApp --app bursa                      # server
-npm test                                      # the list store, and the desktop's formatting + portfolio maths
+npm test                                      # the list, the account, the strategy, the desktop's formatting + portfolio maths
 cd mobile && ./gradlew :shared:testDebugUnitTest   # the phone's formatting + portfolio maths
 androidDeploy bursa                           # build the dev flavor and install it on the phone
 ```

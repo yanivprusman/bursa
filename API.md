@@ -111,6 +111,24 @@ The list and the account are JSON files in `$AUTOMATE_LINUX_DIR/data/bursa/<dev|
 (`list.json`, `account.json`; `BURSA_DATA_DIR` overrides the directory — the tests
 use that). A file that is there but unreadable is reported, never treated as empty.
 
+## The strategy (guarded, like the account)
+
+`GET /api/strategy?id=<id>[&date=YYYY-MM-DD]` — one paper, one day (today by default):
+`bars[{t,end,o,h,l,c,v,vwap,ema}]` (agorot; `t`/`end` are Israel "HH:MM"), `closed`
+(how many of them are complete — the last may be forming), `replay[{t,side,reason,price}]`
+(what the rules would do, filling at the bar's close), `outcome{trips,wins,open,pnl,pct}`
+(the replay in agorot, account fees included), `events[]` (what the trader actually
+decided, from its journal), `trades[]` (the account's trades tagged with this strategy),
+`days[]` (recorded days), `params`, `session{lastEntry,flatAt}`, `enabled`,
+`following`, `papers[]`, `trader{alive,at,marketOpen}`.
+
+`POST /api/strategy` — `{op:"enable", on}` (the switch for all of it),
+`{op:"paper", id, on}` (at most 10 papers), `{op:"params", params}`. Returns the
+config; the trader picks it up within ~20 s.
+
+Trades the strategy made carry `by: {strategy, signal}` in `/api/account`; the owner's
+carry `by: null` (or none, before 21.10.2026). `by` is never taken from a request.
+
 ## Signing a browser in
 
 | Route | |
