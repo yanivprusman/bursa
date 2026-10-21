@@ -45,7 +45,8 @@ export async function strategyView(id: string, date: string | null, now = new Da
     strategy: STRATEGY,
     date: day,
     today,
-    days: [...new Set([...recorded, ...(isToday ? [today] : [])])].sort(),
+    /** Recorded days, and always today — there is always a today to go back to. */
+    days: [...new Set([...recorded, today])].sort(),
     params: p,
     session: session(day, p),
     enabled: cfg.enabled,
