@@ -4,7 +4,7 @@
 // points for an index. Nothing here converts to shekels — a holding's worth is
 // quantity × price / 100 and the phone does that, so one number has one meaning.
 
-import { TaseError, bareId, clock, isoDate, num, paddedId, prose, tase, tidy } from './tase';
+import { TaseError, bareId, clock, isoDate, num, paddedId, prose, tase, tidy } from './tase.ts';
 
 export type Kind = 'security' | 'index';
 
@@ -584,4 +584,35 @@ export async function chart(kind: Kind, id: string, range: Range) {
     return t ? [{ t, v: p.pval }] : [];
   });
   return { range, base: points[0]?.v ?? null, points: thin(points, MAX_POINTS) };
+}
+
+// ── the day's trades, one by one ────────────────────────────────────────────
+
+/**
+ * One trade of the day, as the exchange's intraday chart lists it. `v` is the trade's
+ * turnover in whatever unit the exchange reports (only ever used as a weight, so the
+ * unit cancels out); a few trades carry 0.
+ */
+export type Tick = { id: number; t: string; p: number; v: number };
+
+type RawTick = { recId: number; dtim: string; pval: number; tov: number | null };
+
+/**
+ * Every trade of `tradeDate` in a security, oldest first. The exchange serves only the
+ * current day and clears it before the next opening — whatever is not recorded
+ * (lib/ticks.ts) is gone.
+ */
+export async function dayTrades(id: string, ttlMs = 5 * SEC): Promise<{ tradeDate: string | null; ticks: Tick[] }> {
+  const raw = await tase<{ baseInfo: { dte?: string }; inDay: RawTick[] | null }>(
+    'micro',
+    `chartdata/getindaydata?ct=1&ot=1&lang=1&cf=0&cp=0&cv=0&cl=0&cgt=1&dFrom=&dTo=&oid=${paddedId(id)}`,
+    ttlMs,
+  );
+  const ticks = (raw.inDay ?? []).flatMap((r) => {
+    const t = clock(r.dtim);
+    const p = num(r.pval);
+    return t && p !== null && Number.isInteger(r.recId) ? [{ id: r.recId, t, p, v: Math.max(0, num(r.tov) ?? 0) }] : [];
+  });
+  ticks.sort((a, b) => a.id - b.id);
+  return { tradeDate: isoDate(raw.baseInfo?.dte), ticks };
 }

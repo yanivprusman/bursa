@@ -29,12 +29,12 @@ const MAX_PARALLEL = 4;
 
 /** An upstream failure, with the HTTP status this server should answer with. */
 export class TaseError extends Error {
-  constructor(
-    message: string,
-    readonly status: number = 502,
-  ) {
+  readonly status: number;
+  // Spelled out rather than a parameter property, so plain `node` (the trader) can run this file.
+  constructor(message: string, status = 502) {
     super(message);
     this.name = 'TaseError';
+    this.status = status;
   }
 }
 

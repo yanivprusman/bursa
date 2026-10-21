@@ -17,7 +17,7 @@
 import { randomUUID } from 'node:crypto';
 import { rename } from 'node:fs/promises';
 import type { TradeQuote } from './market';
-import { StoreError, dataFile, readText, serial, writeJson } from './store.ts';
+import { StoreError, dataFile, readText, serial, withFileLock, writeJson } from './store.ts';
 
 export const RULES = {
   /** ₪100,000, in agorot. */
@@ -29,6 +29,15 @@ export const RULES = {
 } as const;
 
 export type Side = 'buy' | 'sell';
+
+/**
+ * Who placed an order other than the owner: a strategy, and the signal (one bar's
+ * decision) that placed it. Set only by server code (scripts/trader.mts), never from a
+ * request body. One signal places at most one order — the account refuses a second.
+ */
+export type Tag = { strategy: string; signal: string };
+
+export const DUPLICATE_SIGNAL = 'האות הזה כבר בוצע';
 
 export type Paper = { id: string; name: string; symbol: string | null; type: string | null; companyId: string | null };
 
@@ -46,6 +55,7 @@ export type Order = {
   /** Agorot held back from the cash while a buy waits: its value at the last price, plus the fee. */
   reserve: number;
   closedAt: string | null;
+  by?: Tag | null;
 };
 
 export type Trade = {
@@ -63,6 +73,7 @@ export type Trade = {
   tradeDate: string | null;
   /** 'live' = the last price during the session; 'open' = the opening price. */
   how: 'live' | 'open';
+  by?: Tag | null;
 };
 
 export type Account = { rev: number; startedAt: string; startCash: number; cash: number; orders: Order[]; trades: Trade[] };
@@ -83,6 +94,9 @@ export const feeOf = (gross: number) => Math.max(RULES.feeMin, Math.ceil(gross *
 
 const ISRAEL = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' });
 export const israelDate = (d: Date) => ISRAEL.format(d);
+const ISRAEL_CLOCK = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+/** "HH:MM:SS", Israel time. */
+export const israelClock = (d: Date) => ISRAEL_CLOCK.format(d);
 
 function nextDay(iso: string): string {
   const d = new Date(`${iso}T12:00:00Z`);
@@ -150,7 +164,7 @@ function execute(a: Account, o: Order, price: number, how: Trade['how'], tradeDa
   if (o.side === 'sell' && o.qty > heldQty(a, o.paper.id) - pendingSells(a, o.paper.id, o.id)) {
     return { ...a, orders: [...others, close('rejected', 'אין מספיק יחידות בתיק')] };
   }
-  const trade: Trade = { id: randomUUID().slice(0, 8), orderId: o.id, side: o.side, paper: o.paper, qty: o.qty, price, gross, fee, at, tradeDate, how };
+  const trade: Trade = { id: randomUUID().slice(0, 8), orderId: o.id, side: o.side, paper: o.paper, qty: o.qty, price, gross, fee, at, tradeDate, how, by: o.by ?? null };
   const cash = o.side === 'buy' ? a.cash - gross - fee : a.cash + gross - fee;
   return { ...a, cash, orders: [...others, close('filled', null)], trades: [...a.trades, trade] };
 }
@@ -162,9 +176,10 @@ function quantity(v: unknown): number {
 
 /**
  * A market order for `qty` units, priced by the quote this server just read. Fills now
- * when the paper is trading live; otherwise waits for the next opening price.
+ * when the paper is trading live; otherwise waits for the next opening price — except a
+ * strategy's order (`by`), which never waits: its signal is about this minute's price.
  */
-export function place(a: Account, side: unknown, rawQty: unknown, q: TradeQuote, now: Date): { account: Account; order: Order } {
+export function place(a: Account, side: unknown, rawQty: unknown, q: TradeQuote, now: Date, by: Tag | null = null): { account: Account; order: Order } {
   if (side !== 'buy' && side !== 'sell') throw new StoreError('צד הפקודה חייב להיות buy או sell');
   const qty = quantity(rawQty);
   if (q.suspended) throw new StoreError('המסחר בנייר הזה מושעה כרגע', 409);
@@ -174,6 +189,8 @@ export function place(a: Account, side: unknown, rawQty: unknown, q: TradeQuote,
   // A paper that already traded today and is now closed waits for TOMORROW's opening —
   // never today's, which is already in the past.
   const fillFrom = live || q.tradeDate !== today ? today : nextDay(today);
+  if (by && !live) throw new StoreError('הנייר לא נסחר כרגע — פקודת אסטרטגיה לא ממתינה', 409);
+  if (by && a.orders.some((o) => o.by?.signal === by.signal)) throw new StoreError(DUPLICATE_SIGNAL, 409);
   const estimate = grossOf(qty, q.last);
   const order: Order = {
     id: randomUUID().slice(0, 8),
@@ -186,6 +203,7 @@ export function place(a: Account, side: unknown, rawQty: unknown, q: TradeQuote,
     reason: null,
     reserve: side === 'buy' ? estimate + feeOf(estimate) : 0,
     closedAt: null,
+    by,
   };
 
   if (side === 'buy' && order.reserve > available(a)) throw new StoreError('אין מספיק מזומן פנוי לקנייה הזאת', 409);
@@ -289,17 +307,23 @@ async function settled(a: Account, quote: Quoter, now: Date) {
   return { account: settle(a, quotes, now), unsettled };
 }
 
+/** Changes made one at a time in this process, and holding the file against the trader's process. */
+const locked = <T>(fn: () => Promise<T>) => inTurn(() => withFileLock(FILE, fn));
+
 export function readAccount(quote: Quoter, now = () => new Date()) {
-  return inTurn(async () => {
+  return locked(async () => {
     const a = await load(now());
     const s = await settled(a, quote, now());
     return summary(await save(a, s.account), s.unsettled);
   });
 }
 
-/** One operation — order, cancel, reset. Returns the account after it (and the order, for `order`). */
-export function operate(op: unknown, quote: Quoter, now = () => new Date()) {
-  return inTurn(async () => {
+/**
+ * One operation — order, cancel, reset. Returns the account after it (and the order, for
+ * `order`). `by` tags an order as a strategy's; the HTTP route never passes it.
+ */
+export function operate(op: unknown, quote: Quoter, now = () => new Date(), by: Tag | null = null) {
+  return locked(async () => {
     const o = (op ?? {}) as Record<string, unknown>;
     const before = await load(now());
     // Whatever was waiting fills first, so a new order sees the cash and units as they really are.
@@ -309,7 +333,7 @@ export function operate(op: unknown, quote: Quoter, now = () => new Date()) {
     switch (o.op) {
       case 'order': {
         if (typeof o.id !== 'string' || !/^\d{1,9}$/.test(o.id)) throw new StoreError('מזהה נייר לא תקין');
-        const placed = place(after, o.side, o.qty, await quote(o.id), now());
+        const placed = place(after, o.side, o.qty, await quote(o.id), now(), by);
         after = placed.account;
         order = placed.order;
         break;
